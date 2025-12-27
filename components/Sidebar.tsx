@@ -6,7 +6,8 @@ import {
   ShieldAlert, 
   Terminal, 
   Zap,
-  Package
+  Package,
+  Settings
 } from 'lucide-react';
 import { AppView } from '../types';
 
@@ -22,12 +23,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView }) => {
     { id: AppView.SECURITY, label: 'Security', icon: ShieldAlert },
     { id: AppView.PLUGINS, label: 'Plugins', icon: Package },
     { id: AppView.LOGS, label: 'Logs', icon: Terminal },
+    { id: AppView.SETTINGS, label: 'Settings', icon: Settings },
   ];
 
   return (
     <aside className="w-56 border-r border-white/5 flex flex-col bg-[#0b0b0d] shrink-0">
       <div className="p-6 flex items-center gap-3">
-        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-900/40">
           <Zap size={16} className="text-white" fill="currentColor" />
         </div>
         <h1 className="font-black text-sm tracking-tight text-white uppercase italic">Flux Core</h1>
@@ -41,24 +43,25 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView }) => {
             <button
               key={item.id}
               onClick={() => setView(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
                 isActive 
-                  ? 'bg-blue-600/10 text-blue-400' 
-                  : 'text-zinc-500 hover:text-zinc-300'
+                  ? 'bg-blue-600/10 text-blue-400 border border-blue-500/10 shadow-[inset_0_0_10px_rgba(59,130,246,0.05)]' 
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.02]'
               }`}
             >
               <Icon size={16} />
-              <span className="text-xs font-bold tracking-tight">{item.label}</span>
+              <span className="text-[11px] font-black tracking-tight uppercase">{item.label}</span>
             </button>
           );
         })}
       </nav>
 
-      <div className="p-4 m-3 rounded-lg bg-zinc-900/50 border border-white/5">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[9px] font-bold text-zinc-600 uppercase">Protection</span>
+      <div className="p-4 m-3 rounded-xl bg-zinc-900/30 border border-white/5 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">Protection</span>
+          <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]" />
         </div>
-        <div className="text-[10px] text-green-500/80 font-mono">ENCRYPTED LINK</div>
+        <div className="text-[9px] text-zinc-400 font-mono tracking-tighter truncate">ENCRYPTED_TUNNEL_ACTIVE</div>
       </div>
     </aside>
   );

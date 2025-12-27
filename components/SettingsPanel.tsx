@@ -1,93 +1,222 @@
 
-import React from 'react';
-import { 
-  Settings, 
-  Cloud, 
-  Globe, 
-  Cpu, 
-  Zap, 
-  Bell, 
-  ShieldCheck,
-  History
-} from 'lucide-react';
+import React, { useState } from 'react';
+import { Settings as SettingsIcon, Shield, Cpu, Monitor, Zap, History, Save, Network, HardDrive, Cpu as Chip } from 'lucide-react';
+import { AppSettings, SystemStats } from '../types';
 
-const SettingsPanel: React.FC = () => {
+interface SettingsPanelProps {
+  settings: AppSettings;
+  setSettings: React.Dispatch<React.SetStateAction<AppSettings>>;
+  stats: SystemStats;
+}
+
+type SettingsTab = 'GENERAL' | 'KERNEL' | 'NETWORK' | 'DMA';
+
+const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, setSettings, stats }) => {
+  const [activeTab, setActiveTab] = useState<SettingsTab>('GENERAL');
+
+  const toggleSetting = (key: keyof AppSettings) => {
+    setSettings(prev => ({ ...prev, [key]: typeof prev[key] === 'boolean' ? !prev[key] : prev[key] }));
+  };
+
+  const updateNested = (section: keyof AppSettings, key: string, value: any) => {
+    setSettings(prev => ({
+        ...prev,
+        [section]: {
+            ...(prev[section] as any),
+            [key]: value
+        }
+    }));
+  };
+
   return (
-    <div className="p-8 max-w-4xl mx-auto space-y-8">
+    <div className="p-6 max-w-4xl mx-auto space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-2">
       <div className="flex flex-col gap-1">
-        <h2 className="text-3xl font-bold text-white tracking-tight">Configuration</h2>
-        <p className="text-zinc-500">Adjust the environment behavior and integration parameters.</p>
+        <div className="flex items-center gap-3">
+          <SettingsIcon size={24} className="text-blue-500" />
+          <h2 className="text-2xl font-black text-white uppercase italic tracking-tight">System Configuration</h2>
+        </div>
+        <p className="text-zinc-500 text-xs font-medium uppercase tracking-widest">Global parameters for {stats.complexity} mode.</p>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-2 p-1 bg-[#141417] rounded-xl border border-white/5">
+         <TabButton active={activeTab === 'GENERAL'} onClick={() => setActiveTab('GENERAL')} icon={Monitor} label="General" />
+         <TabButton active={activeTab === 'KERNEL'} onClick={() => setActiveTab('KERNEL')} icon={Chip} label="Kernel" />
+         <TabButton active={activeTab === 'NETWORK'} onClick={() => setActiveTab('NETWORK')} icon={Network} label="Network" />
+         <TabButton active={activeTab === 'DMA'} onClick={() => setActiveTab('DMA')} icon={HardDrive} label="Hardware DMA" />
       </div>
 
       <div className="space-y-6">
-        <SettingsSection title="Execution Core" icon={<Cpu size={20} className="text-blue-500" />}>
-           <SettingItem 
-              label="Automatic Injection" 
-              desc="Inject immediately when target process is discovered." 
-              type="toggle"
-           />
-           <SettingItem 
-              label="Bypass Mode" 
-              desc="Choose detection avoidance complexity level." 
-              type="select"
-              options={['STEALTH', 'AGGRESSIVE', 'CUSTOM']}
-           />
-           <SettingItem 
-              label="Memory Buffer Size" 
-              desc="Allocation size for internal script buffers (MB)." 
-              type="range"
-              value="512"
-           />
-        </SettingsSection>
+        
+        {/* GENERAL TAB */}
+        {activeTab === 'GENERAL' && (
+            <SettingsSection title="General Behavior" icon={<Monitor size={16} />}>
+            <SettingItem 
+                label="Auto-Injection" 
+                desc="Automatically deploy bypass when process is found." 
+                active={settings.autoInject} 
+                onToggle={() => toggleSetting('autoInject')}
+            />
+            <SettingItem 
+                label="Stealth Mode" 
+                desc="Enable hardware ID masking and thread cloaking." 
+                active={settings.stealthMode} 
+                onToggle={() => toggleSetting('stealthMode')}
+            />
+            </SettingsSection>
+        )}
 
-        <SettingsSection title="Cloud & API" icon={<Cloud size={20} className="text-purple-500" />}>
-           <SettingItem 
-              label="AI Script Assistance" 
-              desc="Enable Gemini-powered debugging features." 
-              type="toggle"
-              enabled={true}
-           />
-           <SettingItem 
-              label="Sync Profiles" 
-              desc="Maintain script libraries across devices." 
-              type="toggle"
-           />
-        </SettingsSection>
+        {/* KERNEL TAB */}
+        {activeTab === 'KERNEL' && (
+            <SettingsSection title="Kernel & Advanced Execution" icon={<Chip size={16} className="text-purple-500" />}>
+            <SettingItem 
+                label="Anti-OBS Protection" 
+                desc="Hardware level screenshot/stream blocking (Overlay Hijack)." 
+                active={settings.antiOBS} 
+                onToggle={() => toggleSetting('antiOBS')}
+            />
+            <SettingItem 
+                label="Realtime Priority Class" 
+                desc="Force bypass process to REALTIME_PRIORITY_CLASS." 
+                active={settings.kernelPriority} 
+                onToggle={() => toggleSetting('kernelPriority')}
+            />
+            
+            <div className="p-5 border-b border-white/5">
+                <span className="text-xs font-bold text-zinc-300 uppercase italic block mb-3">Execution Strategy</span>
+                <div className="grid grid-cols-3 gap-2">
+                    {['INTERNAL', 'EXTERNAL', 'HYPERVISOR'].map((strat) => (
+                        <button 
+                            key={strat}
+                            onClick={() => setSettings(p => ({...p, executionStrategy: strat as any}))}
+                            className={`py-2 rounded-lg text-[10px] font-black uppercase transition-all ${settings.executionStrategy === strat ? 'bg-blue-600 text-white' : 'bg-black/40 text-zinc-600 border border-white/5'}`}
+                        >
+                            {strat}
+                        </button>
+                    ))}
+                </div>
+            </div>
 
-        <SettingsSection title="Interface" icon={<Zap size={20} className="text-orange-500" />}>
-           <SettingItem 
-              label="Dark Mode Persistence" 
-              desc="Force elite dark theme globally." 
-              type="toggle"
-              enabled={true}
-           />
-           <SettingItem 
-              label="Terminal Animation" 
-              desc="Enable high-tech visual transitions." 
-              type="toggle"
-              enabled={true}
-           />
-        </SettingsSection>
+            <div className="p-5 space-y-3">
+                <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-zinc-300 uppercase italic">Memory Allocation Buffer</span>
+                <span className="text-[10px] font-mono text-blue-400 font-black">{settings.memoryBuffer} MB</span>
+                </div>
+                <input 
+                type="range" 
+                min="128" 
+                max="4096" 
+                step="128"
+                value={settings.memoryBuffer}
+                onChange={(e) => setSettings(prev => ({...prev, memoryBuffer: parseInt(e.target.value)}))}
+                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                />
+            </div>
+            </SettingsSection>
+        )}
+
+        {/* NETWORK TAB */}
+        {activeTab === 'NETWORK' && (
+            <SettingsSection title="Network Tunneling" icon={<Network size={16} className="text-green-500" />}>
+                 <SettingItem 
+                    label="Packet Encryption (TLS 1.3)" 
+                    desc="Encrypt all script traffic to remote servers." 
+                    active={settings.network.packetEncryption} 
+                    onToggle={() => updateNested('network', 'packetEncryption', !settings.network.packetEncryption)}
+                />
+                <div className="p-5 space-y-3">
+                    <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-zinc-300 uppercase italic">Artificial Latency (Jitter)</span>
+                    <span className="text-[10px] font-mono text-green-400 font-black">{settings.network.latencySimulation} ms</span>
+                    </div>
+                    <input 
+                    type="range" 
+                    min="0" 
+                    max="500" 
+                    step="10"
+                    value={settings.network.latencySimulation}
+                    onChange={(e) => updateNested('network', 'latencySimulation', parseInt(e.target.value))}
+                    className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-green-600"
+                    />
+                    <p className="text-[9px] text-zinc-600">Simulates human-like lag to bypass statistical analysis.</p>
+                </div>
+            </SettingsSection>
+        )}
+
+        {/* DMA TAB */}
+        {activeTab === 'DMA' && (
+            <SettingsSection title="Hardware DMA Configuration" icon={<HardDrive size={16} className="text-orange-500" />}>
+                 <SettingItem 
+                    label="Enable DMA Bridge" 
+                    desc="Use external hardware for memory access (Safe Mode)." 
+                    active={settings.dma.enabled} 
+                    onToggle={() => updateNested('dma', 'enabled', !settings.dma.enabled)}
+                />
+                {settings.dma.enabled && (
+                    <div className="p-5 space-y-4 bg-orange-500/5">
+                        <div className="space-y-2">
+                             <span className="text-[10px] font-bold text-zinc-400 uppercase">Device Type</span>
+                             <select 
+                                value={settings.dma.device}
+                                onChange={(e) => updateNested('dma', 'device', e.target.value)}
+                                className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none"
+                             >
+                                 <option value="LeetDMA">LeetDMA PCIe</option>
+                                 <option value="RaptorDMA">RaptorDMA</option>
+                                 <option value="Squirrel">Squirrel (Lambda)</option>
+                                 <option value="Software_Emulated">Software Emulated (Dev)</option>
+                             </select>
+                        </div>
+                         <div className="space-y-2">
+                             <span className="text-[10px] font-bold text-zinc-400 uppercase">Firmware Signature</span>
+                             <select 
+                                value={settings.dma.firmwareType}
+                                onChange={(e) => updateNested('dma', 'firmwareType', e.target.value)}
+                                className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none"
+                             >
+                                 <option value="Custom">Custom (1:1 Private)</option>
+                                 <option value="Generic">Generic (Detected Risk)</option>
+                                 <option value="Pooled">Pooled License</option>
+                             </select>
+                        </div>
+                    </div>
+                )}
+            </SettingsSection>
+        )}
+
       </div>
 
-      <div className="pt-8 border-t border-white/5 flex items-center justify-between text-zinc-600 text-[10px] font-mono">
-         <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1"><ShieldCheck size={12}/> ENCRYPTED STORAGE</span>
-            <span className="flex items-center gap-1"><History size={12}/> LAST BACKUP: 2 HOURS AGO</span>
+      <div className="pt-8 border-t border-white/5 flex items-center justify-between">
+         <div className="flex gap-4">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-white/5 rounded-lg">
+               <Shield size={12} className="text-green-500" />
+               <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Config Encrypted</span>
+            </div>
          </div>
-         <button className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-lg transition-all">
-            RESTORE DEFAULTS
+         <button className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] rounded-xl transition-all uppercase tracking-widest shadow-lg shadow-blue-900/20">
+            <Save size={14} />
+            Save Profile
          </button>
       </div>
     </div>
   );
 };
 
+const TabButton: React.FC<{ active: boolean, onClick: () => void, icon: any, label: string }> = ({ active, onClick, icon: Icon, label }) => (
+    <button 
+        onClick={onClick}
+        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[10px] font-black uppercase transition-all ${active ? 'bg-[#27272a] text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+    >
+        <Icon size={14} />
+        {label}
+    </button>
+);
+
 const SettingsSection: React.FC<{ title: string, icon: React.ReactNode, children: React.ReactNode }> = ({ title, icon, children }) => (
-  <div className="bg-[#121216] border border-white/5 rounded-2xl overflow-hidden">
-    <div className="p-4 bg-white/5 border-b border-white/5 flex items-center gap-3">
-       {icon}
-       <h3 className="font-bold text-white text-sm uppercase tracking-widest">{title}</h3>
+  <div className="bg-[#141417] border border-white/5 rounded-2xl overflow-hidden">
+    <div className="p-4 bg-white/[0.02] border-b border-white/5 flex items-center gap-3">
+       <span className="text-zinc-600">{icon}</span>
+       <h3 className="font-black text-white text-[10px] uppercase tracking-widest">{title}</h3>
     </div>
     <div className="divide-y divide-white/[0.03]">
       {children}
@@ -95,31 +224,16 @@ const SettingsSection: React.FC<{ title: string, icon: React.ReactNode, children
   </div>
 );
 
-const SettingItem: React.FC<{ label: string, desc: string, type: 'toggle' | 'select' | 'range', options?: string[], value?: string, enabled?: boolean }> = ({ label, desc, type, options, value, enabled }) => {
-  return (
-    <div className="p-5 flex items-center justify-between hover:bg-white/[0.01] transition-colors">
-       <div className="space-y-1">
-          <h4 className="text-sm font-bold text-zinc-200">{label}</h4>
-          <p className="text-xs text-zinc-500">{desc}</p>
-       </div>
-
-       <div className="shrink-0 ml-8">
-          {type === 'toggle' && (
-            <div className={`w-10 h-5 rounded-full relative cursor-pointer ${enabled ? 'bg-blue-600 shadow-[0_0_10px_#3b82f644]' : 'bg-zinc-800'}`}>
-               <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${enabled ? 'left-6' : 'left-1'}`} />
-            </div>
-          )}
-          {type === 'select' && (
-            <select className="bg-black border border-white/10 rounded-lg px-3 py-1.5 text-xs font-bold text-zinc-300 outline-none focus:border-blue-500">
-               {options?.map(opt => <option key={opt}>{opt}</option>)}
-            </select>
-          )}
-          {type === 'range' && (
-            <input type="range" className="w-32 accent-blue-500 h-1 bg-zinc-800 rounded-full appearance-none" />
-          )}
-       </div>
+const SettingItem: React.FC<{ label: string, desc: string, active: boolean, onToggle: () => void }> = ({ label, desc, active, onToggle }) => (
+  <div className="p-5 flex items-center justify-between hover:bg-white/[0.01] transition-colors cursor-pointer" onClick={onToggle}>
+    <div className="space-y-1">
+      <h4 className={`text-xs font-black transition-colors ${active ? 'text-blue-400' : 'text-zinc-300'}`}>{label}</h4>
+      <p className="text-[10px] text-zinc-600 font-medium">{desc}</p>
     </div>
-  );
-};
+    <div className={`w-9 h-4.5 rounded-full relative transition-all ${active ? 'bg-blue-600' : 'bg-zinc-800'}`}>
+       <div className={`absolute top-0.5 w-3.5 h-3.5 bg-white rounded-full transition-all ${active ? 'left-5' : 'left-0.5'}`} />
+    </div>
+  </div>
+);
 
 export default SettingsPanel;

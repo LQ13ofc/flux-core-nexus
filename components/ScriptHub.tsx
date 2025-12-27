@@ -1,26 +1,31 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+// Fixed: Added missing 'useMemo' import from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, Box, Pin, Zap, Terminal, Search, MousePointer2, Settings2, Sliders, ChevronDown, ChevronUp, GripHorizontal } from 'lucide-react';
-import { GamePack, GameScript } from '../types';
+// Added missing Platform type to imports
+import { GamePack, GameScript, Platform } from '../types';
 
 interface ScriptHubProps {
   game: GamePack;
+  // Added missing currentPlatform property to fixed prop mismatch with App.tsx
+  currentPlatform: Platform;
   onClose: () => void;
   onToggleScript: (gameId: string, scriptId: string) => void;
   onUpdateParam: (gameId: string, scriptId: string, paramId: string, val: any) => void;
 }
 
-const ScriptHub: React.FC<ScriptHubProps> = ({ game, onClose, onToggleScript, onUpdateParam }) => {
+// Added currentPlatform to component destructuring to resolve TypeScript error
+const ScriptHub: React.FC<ScriptHubProps> = ({ game, currentPlatform, onClose, onToggleScript, onUpdateParam }) => {
   const [isPinned, setIsPinned] = useState(false);
   const [search, setSearch] = useState('');
   const [expandedScript, setExpandedScript] = useState<string | null>(null);
   
-  // Dragging logic
+  // Draggable logic otimizada com limites de tela
   const [position, setPosition] = useState({ x: window.innerWidth / 2 - 225, y: 100 });
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef({ startX: 0, startY: 0, initialX: 0, initialY: 0 });
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
     setIsDragging(true);
     dragRef.current = {
       startX: e.clientX,
@@ -28,18 +33,25 @@ const ScriptHub: React.FC<ScriptHubProps> = ({ game, onClose, onToggleScript, on
       initialX: position.x,
       initialY: position.y
     };
-  };
+  }, [position]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging) return;
+      
       const dx = e.clientX - dragRef.current.startX;
       const dy = e.clientY - dragRef.current.startY;
-      setPosition({
-        x: dragRef.current.initialX + dx,
-        y: dragRef.current.initialY + dy
-      });
+      
+      let newX = dragRef.current.initialX + dx;
+      let newY = dragRef.current.initialY + dy;
+      
+      // Impedir que a janela saia da tela
+      newX = Math.max(0, Math.min(newX, window.innerWidth - 450));
+      newY = Math.max(0, Math.min(newY, window.innerHeight - 500));
+      
+      setPosition({ x: newX, y: newY });
     };
+    
     const handleMouseUp = () => setIsDragging(false);
 
     if (isDragging) {
@@ -52,14 +64,15 @@ const ScriptHub: React.FC<ScriptHubProps> = ({ game, onClose, onToggleScript, on
     };
   }, [isDragging]);
 
-  const filteredScripts = game.scripts.filter(s => 
-    s.name.toLowerCase().includes(search.toLowerCase())
+  const filteredScripts = useMemo(() => 
+    game.scripts.filter(s => s.name.toLowerCase().includes(search.toLowerCase())),
+    [game.scripts, search]
   );
 
   return (
     <div 
       style={{ left: position.x, top: position.y }}
-      className={`fixed ${isPinned ? 'z-[9999]' : 'z-[500]'} w-[450px] bg-[#0d0d11]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_40px_100px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-300`}
+      className={`fixed ${isPinned ? 'z-[9999]' : 'z-[500]'} w-[450px] bg-[#0d0d11]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_40px_100px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-300 select-none`}
     >
       {/* Draggable Header */}
       <div 
@@ -73,10 +86,10 @@ const ScriptHub: React.FC<ScriptHubProps> = ({ game, onClose, onToggleScript, on
           </div>
           <div>
             <h3 className="text-base font-black text-white tracking-tight uppercase italic flex items-center gap-2">
-              {game.name} Nexus Pack
+              {game.name} Hub
             </h3>
             <div className="flex gap-2">
-              <span className="text-[9px] font-mono text-zinc-500 font-bold uppercase tracking-widest">{game.engine} / v2.1.0</span>
+              <span className="text-[9px] font-mono text-zinc-500 font-bold uppercase tracking-widest">{game.engine} / v3.0.0</span>
             </div>
           </div>
         </div>
@@ -84,7 +97,7 @@ const ScriptHub: React.FC<ScriptHubProps> = ({ game, onClose, onToggleScript, on
           <button 
             onClick={() => setIsPinned(!isPinned)}
             className={`p-2 rounded-xl transition-all ${isPinned ? 'text-blue-400 bg-blue-400/10' : 'text-zinc-600 hover:text-white hover:bg-white/5'}`}
-            title="Force Always on Top"
+            title="Sempre no Topo"
           >
             <Pin size={18} />
           </button>
@@ -100,7 +113,7 @@ const ScriptHub: React.FC<ScriptHubProps> = ({ game, onClose, onToggleScript, on
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-blue-500 transition-colors" size={14} />
           <input 
             type="text" 
-            placeholder="Search script library..."
+            placeholder="Search predefined scripts..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full bg-[#111114] border border-white/10 rounded-xl py-2 pl-9 pr-4 text-xs font-mono text-zinc-400 outline-none focus:border-blue-500/30 transition-all placeholder:text-zinc-700"
@@ -108,7 +121,7 @@ const ScriptHub: React.FC<ScriptHubProps> = ({ game, onClose, onToggleScript, on
         </div>
       </div>
 
-      {/* Script Window Content */}
+      {/* Script List Content */}
       <div className="max-h-[500px] overflow-y-auto p-4 space-y-3 custom-scrollbar">
         {filteredScripts.map((script) => (
           <div 
@@ -134,7 +147,7 @@ const ScriptHub: React.FC<ScriptHubProps> = ({ game, onClose, onToggleScript, on
                   <h4 className={`text-[11px] font-black uppercase tracking-tight ${script.enabled ? 'text-white' : 'text-zinc-500'}`}>
                     {script.name}
                   </h4>
-                  <p className="text-[9px] font-bold text-zinc-600 uppercase">Status: {script.enabled ? 'ENABLED' : 'STBY'}</p>
+                  <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-tighter">Status: {script.enabled ? 'ACTIVE' : 'STBY'}</p>
                 </div>
               </div>
               <div className="flex items-center gap-4">
@@ -169,13 +182,14 @@ const ScriptHub: React.FC<ScriptHubProps> = ({ game, onClose, onToggleScript, on
                         type="range" 
                         min={p.min} 
                         max={p.max} 
+                        step={1}
                         value={p.value}
-                        onChange={(e) => onUpdateParam(game.id, script.id, p.id, e.target.value)}
+                        onChange={(e) => onUpdateParam(game.id, script.id, p.id, Number(e.target.value))}
                         className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-600"
                       />
                     ) : (
                       <input 
-                        type="text"
+                        type={p.type === 'number' ? 'number' : 'text'}
                         value={p.value}
                         onChange={(e) => onUpdateParam(game.id, script.id, p.id, e.target.value)}
                         placeholder="Enter value..."
