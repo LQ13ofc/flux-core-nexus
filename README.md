@@ -28,7 +28,7 @@ Este software foi desenvolvido exclusivamente para fins **EDUCACIONAIS** e de pe
 Criamos um script automático que instala **TUDO** que você precisa (Node, Python, Compiladores C++, Dependências) com um clique.
 
 1.  **Clone o repositório.**
-2.  **Execute o arquivo `setup.bat`** (localizado na pasta raiz).
+2.  **Execute o arquivo `setup`** (localizado na pasta: windows/linux/mac que estão na pasta raiz).
 3.  Aguarde o script finalizar (pode demorar alguns minutos para instalar as ferramentas de compilação C++).
 4.  Após finalizar, inicie com `npm start`.
 
