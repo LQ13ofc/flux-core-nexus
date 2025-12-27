@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Zap, Target, Search, RefreshCw, Activity,
-  FileCode, FolderOpen, PlayCircle, Ghost, ShieldAlert, AlertTriangle, RotateCcw, Power, Shield, Cpu, Binary
+  FileCode, FolderOpen, PlayCircle, Ghost, ShieldAlert, AlertTriangle, RotateCcw, Power, Shield, Cpu, Binary, FileCheck
 } from 'lucide-react';
 import { SystemStats, ProcessInfo, AppSettings } from '../types';
 
@@ -19,7 +19,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
   const [processes, setProcesses] = useState<ProcessInfo[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [showProcessList, setShowProcessList] = useState(false);
-  const [searchFilter, setSearchFilter] = useState('');
+  const [fileDetails, setFileDetails] = useState<{name: string, size: string} | null>(null);
   
   const fetchProcesses = async () => {
     if (isScanning) return;
@@ -43,12 +43,34 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
     }
   }, []);
 
+  const handleSelectDll = async () => {
+    if ((window as any).require) {
+        const { ipcRenderer } = (window as any).require('electron');
+        const fileData = await ipcRenderer.invoke('select-file');
+        
+        if (fileData && fileData.path) {
+            setStats(prev => ({ ...prev, target: { ...prev.target, dllPath: fileData.path } }));
+            setFileDetails({ name: fileData.name, size: fileData.size });
+            addLog(`Payload Loaded: ${fileData.name} (${fileData.size})`, 'SUCCESS', 'LOADER');
+        } else {
+            addLog('File selection cancelled or invalid.', 'WARN', 'LOADER');
+        }
+    }
+  };
+
   const handleInject = async () => {
     if (!stats.target.process) {
-      addLog('Select target process.', 'WARN', 'CORE');
+      addLog('Injection Failed: No Target Process Selected.', 'WARN', 'CORE');
       setShowProcessList(true);
       return;
     }
+
+    if (!stats.target.dllPath) {
+        addLog('Injection Failed: No Payload (.dll) Selected.', 'WARN', 'CORE');
+        handleSelectDll(); 
+        return;
+    }
+
     setStats(p => ({ ...p, processStatus: 'ATTACHING', injectionPhase: 0 }));
     
     if ((window as any).require) {
@@ -102,8 +124,8 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
         <div className="col-span-8 space-y-6">
             
             {/* Target Select */}
-            <div className="bg-[#111114] border border-white/5 p-6 rounded-3xl relative shadow-2xl">
-                <div className="flex items-center justify-between mb-4 text-zinc-500">
+            <div className="bg-[#111114] border border-white/5 p-6 rounded-3xl relative shadow-2xl space-y-4">
+                <div className="flex items-center justify-between text-zinc-500">
                     <div className="flex items-center gap-3">
                         <Target size={18} className="text-blue-500" />
                         <span className="text-[11px] font-black uppercase tracking-widest">Target Environment</span>
@@ -111,6 +133,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
                     <button onClick={fetchProcesses} className="hover:text-white"><RefreshCw size={16} className={isScanning ? 'animate-spin' : ''} /></button>
                 </div>
                 
+                {/* Process Picker */}
                 <div className="relative">
                     <div onClick={() => setShowProcessList(!showProcessList)} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm font-mono flex items-center justify-between cursor-pointer hover:border-blue-500/30 transition-all">
                         <div className="flex items-center gap-4">
@@ -136,6 +159,30 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
                         </div>
                     )}
                 </div>
+
+                {/* DLL Picker with Enhanced Feedback */}
+                <div 
+                    onClick={handleSelectDll}
+                    className={`w-full bg-black/40 border rounded-2xl p-4 text-sm font-mono flex items-center justify-between cursor-pointer transition-all ${stats.target.dllPath ? 'border-green-500/30 bg-green-500/5' : 'border-white/10 hover:border-blue-500/30'}`}
+                >
+                    <div className="flex items-center gap-4">
+                        {stats.target.dllPath ? <FileCheck size={18} className="text-green-500" /> : <FileCode size={18} className="text-zinc-600" />}
+                        {stats.target.dllPath ? (
+                            <div className="flex flex-col">
+                                <span className="text-white font-black italic truncate max-w-[300px]">
+                                    {fileDetails?.name || stats.target.dllPath.split(/[\\/]/).pop()}
+                                </span>
+                                <span className="text-[9px] text-green-500 font-bold uppercase tracking-widest">
+                                    VERIFIED • {fileDetails?.size || 'READY'}
+                                </span>
+                            </div>
+                        ) : (
+                            <span className="text-zinc-600 italic">Select Payload (.dll)...</span>
+                        )}
+                    </div>
+                    <FolderOpen size={18} className="text-zinc-700" />
+                </div>
+
             </div>
 
             {/* Phase Tracker */}
