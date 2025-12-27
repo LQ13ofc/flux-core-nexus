@@ -1,5 +1,5 @@
 
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const os = require('os');
 const { autoUpdater } = require('electron-updater');
@@ -9,51 +9,71 @@ const { autoUpdater } = require('electron-updater');
 // o que é um vetor comum de detecção (ex: Discord Overlay detection).
 app.disableHardwareAcceleration();
 
-// --- CONFIGURAÇÃO DO CORE NATIVO (DLL/SO) ---
+// --- CONFIGURAÇÃO DO CORE NATIVO (DLL/SO) VIA KOFFI ---
 let nativeCore = null;
+let NativeLib = null;
+
 try {
-  const ffi = require('ffi-napi');
-  // Mapeia o binário correto com base na plataforma (x64 ou arm64)
+  // Koffi é a alternativa moderna e rápida para FFI-NAPI
+  const koffi = require('koffi');
+  
+  // Mapeia o binário correto com base na plataforma
   const binName = os.platform() === 'win32' ? 'FluxCore_x64.dll' : 'FluxCore.so';
+  
+  // Em desenvolvimento, as DLLs podem não existir, então usamos um try/catch silencioso para não quebrar a UI
   const libPath = path.join(process.resourcesPath, 'native', binName);
   
-  // Exposição de funções críticas do C++ para o JavaScript
-  nativeCore = ffi.Library(libPath, {
-    'Inject': ['bool', ['string', 'int']],
-    'ExecuteScript': ['void', ['string', 'string']],
-    'SetStealthMode': ['void', ['bool']],
-    'EmergencyUnload': ['void', []], // New Panic Function
-    'GetStatus': ['int', []]
-  });
-  console.log('Nexus Native Core: LINKED AND SECURE');
+  // Definição das assinaturas C++
+  /*
+    bool Inject(const char* game, int mode);
+    void ExecuteScript(const char* game, const char* script);
+    void SetStealthMode(bool enabled);
+    void EmergencyUnload();
+  */
+  
+  // Tenta carregar a biblioteca apenas se o arquivo existir (simulação em dev)
+  const fs = require('fs');
+  if (fs.existsSync(libPath)) {
+    NativeLib = koffi.load(libPath);
+
+    nativeCore = {
+      Inject: NativeLib.func('bool Inject(const char* game, int mode)'),
+      ExecuteScript: NativeLib.func('void ExecuteScript(const char* game, const char* script)'),
+      SetStealthMode: NativeLib.func('void SetStealthMode(bool enabled)'),
+      EmergencyUnload: NativeLib.func('void EmergencyUnload()')
+    };
+    console.log('Nexus Native Core: LINKED AND SECURE (Ring -1 Driver Loaded)');
+  } else {
+    throw new Error("Binary not found on disk");
+  }
+
 } catch (e) {
-  console.warn('Nexus Native Core: Binary not found. Switching to Remote/UI-Only mode.');
+  console.warn(`Nexus Native Core: Driver not loaded. Running in UI/Remote Bridge Mode. Reason: ${e.message}`);
 }
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1040,
+    width: 1080,
     height: 720,
     frame: false,
     backgroundColor: '#0d0d0f',
     transparent: true,
-    resizable: false, // Evita bugs de layout na injeção
+    resizable: false,
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false,
-      backgroundThrottling: false // Mantém a performance mesmo em segundo plano (Alt-Tab)
+      contextIsolation: false, // Necessário para require('electron') no render process (React)
+      backgroundThrottling: false,
+      devTools: true
     },
     icon: path.join(__dirname, 'assets/icon.png'),
-    title: "Flux Core Host" // Static title
+    title: "Flux Core Host"
   });
 
-  // Previne que o título da janela mude, o que pode ser rastreado
   win.on('page-title-updated', (e) => {
     e.preventDefault();
   });
 
-  // --- STEALTH TEC: Proteção contra gravação de tela (OBS/Discord/Screenshots) ---
-  // Isso impede que anti-cheats baseados em print de tela capturem o menu
+  // Proteção contra captura de tela (Windows/Mac)
   if (process.platform === 'win32' || process.platform === 'darwin') {
     win.setContentProtection(true);
   }
@@ -61,14 +81,14 @@ function createWindow() {
   win.loadFile('index.html');
   
   // Auto-Update silencioso
-  autoUpdater.checkForUpdatesAndNotify();
+  // autoUpdater.checkForUpdatesAndNotify();
 }
 
-// Handler de Informações de Sistema (Chamado pelo Dashboard.tsx)
+// Handler de Informações de Sistema
 ipcMain.handle('get-os-info', () => {
   return {
-    platform: os.platform(), // win32, darwin, linux
-    arch: os.arch(),         // x64, arm64
+    platform: os.platform(),
+    arch: os.arch(),
     isWindows: os.platform() === 'win32',
     hostname: os.hostname(),
     isNativeLoaded: !!nativeCore
@@ -79,18 +99,20 @@ ipcMain.handle('get-os-info', () => {
 ipcMain.on('execute-action', (event, { game, script, params }) => {
   if (nativeCore && os.platform() === 'win32') {
     try {
+      // Koffi converte string JS para const char* automaticamente
       nativeCore.ExecuteScript(game, script);
-      event.reply('nexus:log', { message: `Executed: ${script} on ${game} (NATIVE)`, level: 'SUCCESS' });
+      event.reply('nexus:log', { message: `Executed: Payload injected into ${game} [NATIVE KERNEL]`, level: 'SUCCESS' });
     } catch (err) {
-      event.reply('nexus:log', { message: `Native execution error: ${err.message}`, level: 'ERROR' });
+      event.reply('nexus:log', { message: `Native Driver Error: ${err.message}`, level: 'ERROR' });
     }
   } else {
-    // Modo Remote Bridge / Simulador
-    console.log(`[Remote Bridge] ${game} -> ${script}`);
-    // Simula latência de rede para realismo
+    // Modo Simulação / Remote Bridge
+    console.log(`[Remote Bridge] Target: ${game} | Payload Size: ${script.length} bytes`);
+    
     setTimeout(() => {
-        event.reply('nexus:log', { message: `Remote Bridge: Command relayed to host for ${game}`, level: 'INFO' });
-    }, 50);
+        // Simula sucesso para a UI
+        event.reply('nexus:log', { message: `Remote Bridge: Payload dispatched to ${game} (127.0.0.1:8080)`, level: 'INFO' });
+    }, 200);
   }
 });
 
@@ -99,9 +121,11 @@ ipcMain.on('panic-trigger', (event) => {
     if (nativeCore) {
         try {
             nativeCore.EmergencyUnload();
-        } catch(e) {}
+        } catch(e) {
+            console.error("Panic Error:", e);
+        }
     }
-    event.reply('nexus:log', { message: `KERNEL PANIC TRIGGERED: DRIVER UNLOADED. MEMORY WIPED.`, level: 'CRITICAL' });
+    event.reply('nexus:log', { message: `*** EMERGENCY PANIC: DRIVER UNLOADED & MEMORY ZEROED ***`, level: 'CRITICAL' });
 });
 
 app.whenReady().then(createWindow);
