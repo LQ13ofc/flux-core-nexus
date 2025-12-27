@@ -152,21 +152,16 @@ ipcMain.handle('select-file', async () => {
 // 3. Get Processes (With Caching)
 ipcMain.handle('get-processes', async () => {
     const now = Date.now();
-    // Return cache if requested within 2 seconds and we have data
-    if (now - lastProcessFetch < 2000 && processCache.length > 0) {
+    // Reduced cache time to 1 second to make refresh feel more responsive
+    if (now - lastProcessFetch < 1000 && processCache.length > 0) {
         return processCache;
     }
     
     const processes = await RobloxInjector.getProcessList();
     
-    // Only update cache if we got results, otherwise keep old cache to prevent empty UI
-    if (processes.length > 0) {
-        processCache = processes;
-        lastProcessFetch = now;
-    } else if (processCache.length === 0) {
-        // If cache is empty and we got nothing (e.g. startup), return a fallback
-        return []; 
-    }
+    // Always update cache with latest result
+    processCache = processes;
+    lastProcessFetch = now;
     
     return processCache;
 });

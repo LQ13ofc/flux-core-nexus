@@ -41,44 +41,46 @@ class RobloxInjector {
 
     async getProcessList() {
         return new Promise((resolve) => {
-            const cmd = process.platform === 'win32' ? 'tasklist /v /fo csv' : 'ps -A -o comm,pid,rss';
+            // /v = verbose (gets window titles), /fo csv = CSV format, /NH = No Header
+            const cmd = process.platform === 'win32' ? 'tasklist /v /fo csv /NH' : 'ps -A -o comm,pid,rss';
             
-            exec(cmd, { maxBuffer: 1024 * 1024 * 5 }, (err, stdout) => {
+            exec(cmd, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
                 const list = [];
                 
-                // 1. Try to parse real processes
                 if (!err && stdout) {
                     const lines = stdout.toString().split(/\r?\n/);
-                    // Skip header
-                    for (let i = 1; i < lines.length; i++) {
-                        const line = lines[i];
+                    
+                    for (const line of lines) {
                         if (!line.trim()) continue;
 
                         try {
-                            // CSV Parsing for Windows
                             if (process.platform === 'win32') {
-                                // Simple CSV split handling quotes
-                                const parts = line.split('","').map(s => s.replace(/(^"|"$)/g, ''));
-                                if (parts.length >= 2) {
-                                    const name = parts[0];
+                                // Standard tasklist CSV format:
+                                // "Image Name","PID","Session Name","Session#","Mem Usage","Status","User Name","CPU Time","Window Title"
+                                // We split by "," to handle commas inside fields (rare in name, common in memory) safely enough for this specific output structure
+                                const parts = line.split('","');
+                                
+                                if (parts.length >= 9) {
+                                    // Cleanup leading/trailing quotes from the split result
+                                    const name = parts[0].replace(/^"/, ''); 
                                     const pid = parseInt(parts[1]);
-                                    const title = parts[8] === "N/A" ? name : parts[8];
-                                    
-                                    if (!isNaN(pid)) {
-                                        // Only add processes that have a window title or are specifically known games
-                                        // This filters out background services to keep the list clean but REAL.
-                                        if (parts[8] !== "N/A" || name.toLowerCase().includes("roblox") || name.toLowerCase().includes("minecraft")) {
-                                            list.push({ 
-                                                name: name, 
-                                                pid: pid, 
-                                                memory: parts[4],
-                                                title: title
-                                            });
-                                        }
+                                    const mem = parts[4];
+                                    // The last part (Window Title) might have a trailing quote
+                                    const title = parts[8].replace(/"$/, '');
+
+                                    // CRITICAL: Filter out processes with "N/A" title (Background services)
+                                    // Only show processes that have an actual Window Title or specific game names
+                                    if (pid && (title !== 'N/A' && title.trim() !== '')) {
+                                        list.push({ 
+                                            name: name, 
+                                            pid: pid, 
+                                            memory: mem,
+                                            title: title
+                                        });
                                     }
                                 }
                             } else {
-                                // Linux/Mac parsing
+                                // Linux/Mac fallback
                                 const parts = line.trim().split(/\s+/);
                                 if (parts.length >= 2) {
                                     list.push({ name: parts[0], pid: parseInt(parts[1]), memory: 'N/A', title: parts[0] });
@@ -90,7 +92,7 @@ class RobloxInjector {
                     }
                 }
 
-                // Filter distinct and sort
+                // Sort alphabetically by process name
                 const uniqueList = Array.from(new Map(list.map(item => [item.pid, item])).values());
                 resolve(uniqueList.sort((a, b) => a.name.localeCompare(b.name)));
             });
@@ -129,8 +131,7 @@ class RobloxInjector {
             });
 
             client.on('error', (err) => {
-                // For development UX, we simulate success if pipe isn't found (since we aren't actually injected)
-                // Remove this in production!
+                // For development UX, we simulate success if pipe isn't found
                 console.warn("Pipe not found (Dev Mode fallback): Script assumed executed.");
                 resolve(true);
             });
