@@ -91,7 +91,7 @@ Se o script automático falhar, siga estes passos:
 
 1.  **Clone o repositório:**
     ```bash
-    git clone https://github.com/seu-usuario/flux-core-nexus.git
+    git clone https://github.com/seu-usuario/flux-core-nexus
     cd flux-core-nexus
     ```
 
