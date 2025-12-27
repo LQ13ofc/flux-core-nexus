@@ -118,7 +118,13 @@ function checkRateLimit(ip, limit = 500) {
     return true;
 }
 
-// 1. Select File
+// 1. Get Bundled DLL Path (Internal)
+ipcMain.handle('get-bundled-dll', async () => {
+    // Simulate an internal path. In production, this file should exist in resources.
+    return path.join(__dirname, 'assets', 'flux-core-engine.dll');
+});
+
+// 2. Select File (Deprecated for user, kept for advanced dev mode)
 ipcMain.handle('select-file', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
         properties: ['openFile'],
@@ -126,23 +132,22 @@ ipcMain.handle('select-file', async () => {
     });
     if (result.canceled || result.filePaths.length === 0) return null;
     
-    // Return safe metadata only
     const fs = require('fs');
     const stat = fs.statSync(result.filePaths[0]);
     return {
-        path: result.filePaths[0], // In a real scenario, keep path in main, send ID to renderer
+        path: result.filePaths[0],
         name: path.basename(result.filePaths[0]),
         size: (stat.size / 1024).toFixed(2) + ' KB'
     };
 });
 
-// 2. Get Processes (Sanitized)
+// 3. Get Processes (Sanitized)
 ipcMain.handle('get-processes', async () => {
     if(!checkRateLimit('proc', 2000)) return []; // 2s cache
     return await RobloxInjector.getProcessList();
 });
 
-// 3. Inject DLL (Encrypted Payload)
+// 4. Inject DLL (Encrypted Payload)
 ipcMain.handle('inject-dll', async (event, encryptedPayload) => {
     const data = decryptPayload(encryptedPayload);
     if (!data || !data.pid || !data.dllPath) return { success: false, error: "Invalid Payload or Decryption Failed" };
@@ -158,7 +163,7 @@ ipcMain.handle('inject-dll', async (event, encryptedPayload) => {
     }
 });
 
-// 4. Execute Script (Encrypted Payload)
+// 5. Execute Script (Encrypted Payload)
 ipcMain.handle('execute-script', async (event, encryptedPayload) => {
     const data = decryptPayload(encryptedPayload);
     if (!data || !data.script) return { success: false, error: "Invalid Payload or Decryption Failed" };
@@ -171,5 +176,5 @@ ipcMain.handle('execute-script', async (event, encryptedPayload) => {
     }
 });
 
-// 5. Get Platform
+// 6. Get Platform
 ipcMain.handle('get-platform', () => process.platform);

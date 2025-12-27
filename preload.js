@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('fluxAPI', {
     getPlatform: () => ipcRenderer.invoke('get-platform'),
     getProcesses: () => ipcRenderer.invoke('get-processes'),
     selectFile: () => ipcRenderer.invoke('select-file'),
+    getBundledDLL: () => ipcRenderer.invoke('get-bundled-dll'),
     
     inject: async (pid, dllPath, settings) => {
         const payload = encryptPayload({ pid, dllPath, settings });
