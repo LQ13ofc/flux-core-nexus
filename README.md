@@ -23,6 +23,17 @@ Este software foi desenvolvido exclusivamente para fins **EDUCACIONAIS** e de pe
 
 ---
 
+## ⚡ Instalação Rápida (Recomendado)
+
+Criamos um script automático que instala **TUDO** que você precisa (Node, Python, Compiladores C++, Dependências) com um clique.
+
+1.  **Clone o repositório.**
+2.  **Execute o arquivo `setup.bat`** (localizado na pasta raiz).
+3.  Aguarde o script finalizar (pode demorar alguns minutos para instalar as ferramentas de compilação C++).
+4.  Após finalizar, inicie com `npm start`.
+
+---
+
 ## 🛡️ Funcionalidades Principais
 
 ### 🧠 Universal Runtime Grid
@@ -67,18 +78,21 @@ O Flux Core utiliza uma arquitetura híbrida:
 
 ---
 
-## 📦 Instalação e Build
+## 📦 Instalação Manual e Build
+
+Se o script automático falhar, siga estes passos:
 
 ### Pré-requisitos
 *   Node.js v18+
-*   Python 3.11 (para scripts Python)
-*   Visual Studio Build Tools (para compilação nativa no Windows)
+*   Python 3.11 (para scripts Python e node-gyp)
+*   Visual Studio Build Tools 2022 (Carga de trabalho: Desenvolvimento para Desktop com C++)
 
 ### Passo a Passo
 
 1.  **Clone o repositório:**
     ```bash
-    git clone https://github.com/LQ13ofc/Injetor
+    git clone https://github.com/seu-usuario/flux-core-nexus.git
+    cd flux-core-nexus
     ```
 
 2.  **Instale as dependências:**
