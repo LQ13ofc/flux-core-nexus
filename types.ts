@@ -3,13 +3,13 @@ export enum AppView {
   DASHBOARD = 'dashboard',
   EDITOR = 'editor',
   SECURITY = 'security',
-  LOGS = 'logs',
-  SETTINGS = 'settings'
+  PLUGINS = 'plugins',
+  LOGS = 'logs'
 }
 
+export type LanguageRuntime = 'lua' | 'python' | 'js' | 'csharp' | 'cpp' | 'c' | 'auto';
+
 export interface SystemStats {
-  cpu: number;
-  memory: number;
   processStatus: 'INACTIVE' | 'ATTACHING' | 'ACTIVE' | 'ERROR';
   targetProcess: string;
 }
@@ -27,4 +27,12 @@ export interface HWIDProfile {
   diskId: string;
   mac: string;
   gpu: string;
+}
+
+export interface PluginModule {
+  id: LanguageRuntime;
+  name: string;
+  description: string;
+  type: 'Engine' | 'Wrapper' | 'JIT';
+  enabled: boolean;
 }

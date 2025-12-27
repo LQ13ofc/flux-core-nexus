@@ -1,145 +1,117 @@
 
-import React, { useState } from 'react';
-import { 
-  ShieldAlert, 
-  RefreshCcw, 
-  Monitor, 
-  Cpu, 
-  Network, 
-  Database,
-  Lock,
-  EyeOff,
-  UserCheck
-} from 'lucide-react';
-import { HWIDProfile } from '../types';
+import React, { useState, useMemo } from 'react';
+import { ShieldCheck, RefreshCcw, Lock, EyeOff, Terminal, Zap } from 'lucide-react';
+import { HWIDProfile, PluginModule } from '../types';
 
 interface SecuritySuiteProps {
   addLog: (msg: string, level?: any, cat?: string) => void;
+  enabledPlugins: PluginModule[];
 }
 
-const SecuritySuite: React.FC<SecuritySuiteProps> = ({ addLog }) => {
+const SecuritySuite: React.FC<SecuritySuiteProps> = ({ addLog, enabledPlugins }) => {
   const [hwid, setHwid] = useState<HWIDProfile>({
-    smbios: 'ASUS-X99-PRO-1202',
-    diskId: 'SAMSUNG-EVO-870-2TB-90A1',
-    mac: '00:1A:2B:3C:4D:5E',
-    gpu: 'NVIDIA RTX 4090 (24GB)'
+    smbios: 'FLUX-HW-7712',
+    diskId: 'SSD-SATA-8801',
+    mac: '0A:11:BB:CC:DD:EE',
+    gpu: 'VIRTUAL-FLUX-GPU'
   });
   
   const [isSpoofing, setIsSpoofing] = useState(false);
 
-  const generateRandomHex = (length: number) => {
-    return Array.from({ length }, () => Math.floor(Math.random() * 16).toString(16)).join('').toUpperCase();
-  };
+  // Define which security methods belong to which language runtimes
+  const allMethods = useMemo(() => [
+    { label: "Kernel Hook Evasion", desc: "Universal bypass for ring-0 watchdogs.", lang: ['c', 'cpp'] },
+    { label: "Luau VM Cloaking", desc: "Hides script execution from in-game VM checks.", lang: ['lua'] },
+    { label: "FiveM/Mono Evasion", desc: "Specific JIT obfuscation for Unity based engines.", lang: ['csharp'] },
+    { label: "Social Club Auth Emulator", desc: "Bypass DRM/Social Club checks for RAGE engine games.", lang: ['cpp', 'c'] },
+    { label: "Script Hook V Stealth", desc: "Enables undetected native execution in GTA 5.", lang: ['cpp'] },
+    { label: "Python Bytecode Shield", desc: "Encrypts automation logic in memory.", lang: ['python'] },
+    { label: "Anti-Analysis Trap", desc: "Detects and crashes debuggers before they can attach.", lang: ['c', 'cpp', 'csharp'] },
+    { label: "Process Integrity Patch", desc: "Forces game to ignore unauthorized memory modifications.", lang: ['lua', 'js'] }
+  ], []);
+
+  // Filter methods based on enabled runtimes
+  const visibleMethods = useMemo(() => {
+    const enabledIds = enabledPlugins.map(p => p.id);
+    return allMethods.filter(m => m.lang.some(l => enabledIds.includes(l as any)));
+  }, [enabledPlugins, allMethods]);
 
   const handleSpoof = () => {
     setIsSpoofing(true);
-    addLog('Executing Global HWID Spoofing Sequence...', 'INFO', 'SPOOFER');
-    
+    addLog('Refreshing Virtual Identifiers...', 'INFO', 'SECURITY');
     setTimeout(() => {
-      const newHwid: HWIDProfile = {
-        smbios: `ROG-STRIX-${generateRandomHex(4)}-${generateRandomHex(4)}`,
-        diskId: `DISK-${generateRandomHex(8)}`,
-        mac: `00:${generateRandomHex(2)}:${generateRandomHex(2)}:${generateRandomHex(2)}:${generateRandomHex(2)}:${generateRandomHex(2)}`,
-        gpu: 'AMD RADEON RX 7900 XTX'
-      };
-      setHwid(newHwid);
+      setHwid({
+        smbios: `FLUX-HW-${Math.floor(Math.random() * 9000 + 1000)}`,
+        diskId: `DISK-${Math.floor(Math.random() * 9000 + 1000)}`,
+        mac: `0A:${Math.floor(Math.random() * 90).toString(16).toUpperCase()}:BB:CC:DD:EE`,
+        gpu: 'VIRTUAL-FLUX-GPU'
+      });
       setIsSpoofing(false);
-      addLog('All hardware identifiers modified successfully.', 'SUCCESS', 'SPOOFER');
-    }, 2000);
+      addLog('Identities randomized.', 'SUCCESS', 'SECURITY');
+    }, 1000);
   };
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-8">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-3xl font-bold text-white tracking-tight">Security Suite</h2>
-        <p className="text-zinc-500">Manage hardware identification and anti-analysis mechanisms.</p>
+    <div className="p-8 max-w-2xl mx-auto space-y-6">
+      <div className="flex items-center gap-3">
+        <ShieldCheck className="text-blue-500" />
+        <h2 className="text-xl font-bold text-white">Security & Evasion</h2>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* HWID Spoofer Card */}
-        <div className="bg-[#121216] border border-white/5 rounded-2xl p-6 flex flex-col">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-3">
-              <UserCheck className="text-blue-500" />
-              <h3 className="font-bold text-lg text-white">Hardware Identity</h3>
-            </div>
-            <button 
-              onClick={handleSpoof}
-              disabled={isSpoofing}
-              className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all disabled:opacity-50"
-            >
-              <RefreshCcw size={18} className={isSpoofing ? 'animate-spin' : ''} />
-            </button>
-          </div>
-
-          <div className="space-y-4 flex-1">
-            <IdField icon={<Monitor size={14} />} label="SMBIOS / BIOS" value={hwid.smbios} />
-            <IdField icon={<Database size={14} />} label="Disk Serial ID" value={hwid.diskId} />
-            <IdField icon={<Network size={14} />} label="MAC Address" value={hwid.mac} />
-            <IdField icon={<Cpu size={14} />} label="GPU Descriptor" value={hwid.gpu} />
-          </div>
-
-          <div className="mt-8 p-4 bg-orange-500/5 border border-orange-500/10 rounded-xl">
-             <div className="flex gap-3">
-                <ShieldAlert size={18} className="text-orange-500 shrink-0" />
-                <p className="text-[10px] text-orange-200/60 leading-normal uppercase font-bold tracking-wider">
-                  Warning: Modification of hardware identifiers may require a target system restart for some low-level watchdogs.
-                </p>
-             </div>
-          </div>
+      {/* HWID remains universal */}
+      <div className="bg-[#141417] border border-white/5 rounded-xl p-6">
+        <div className="flex items-center justify-between mb-6">
+          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Virtual HWID (Universal)</span>
+          <button onClick={handleSpoof} disabled={isSpoofing} className="text-blue-500 hover:text-blue-400 disabled:opacity-30">
+            <RefreshCcw size={16} className={isSpoofing ? 'animate-spin' : ''} />
+          </button>
         </div>
 
-        {/* Evasion Techniques */}
-        <div className="bg-[#121216] border border-white/5 rounded-2xl p-6">
-          <div className="flex items-center gap-3 mb-8">
-            <EyeOff className="text-purple-500" />
-            <h3 className="font-bold text-lg text-white">Evasion Layer</h3>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center p-3 bg-black/20 rounded-lg border border-white/5">
+            <span className="text-xs text-zinc-500">SMBIOS</span>
+            <span className="text-xs font-mono text-zinc-300">{hwid.smbios}</span>
           </div>
+          <div className="flex justify-between items-center p-3 bg-black/20 rounded-lg border border-white/5">
+            <span className="text-xs text-zinc-500">MAC</span>
+            <span className="text-xs font-mono text-zinc-300">{hwid.mac}</span>
+          </div>
+        </div>
+      </div>
 
-          <div className="space-y-3">
-            <ToggleItem label="Direct Syscall Manager" initialValue={true} />
-            <ToggleItem label="VMT Table Protector" initialValue={true} />
-            <ToggleItem label="Polymorphic Code Engine" initialValue={false} />
-            <ToggleItem label="Thread Callstack Spoofing" initialValue={true} />
-            <ToggleItem label="Anti-Debug Breakpoint Trap" initialValue={true} />
-            <ToggleItem label="Process Integrity Check Bypass" initialValue={true} />
-          </div>
-
-          <div className="mt-8 grid grid-cols-2 gap-3">
-             <div className="p-4 bg-black/40 rounded-xl border border-white/5 flex flex-col items-center">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase mb-2">Stability</span>
-                <span className="text-xl font-bold text-blue-500">99.8%</span>
-             </div>
-             <div className="p-4 bg-black/40 rounded-xl border border-white/5 flex flex-col items-center">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase mb-2">Detection Risk</span>
-                <span className="text-xl font-bold text-green-500">LOW</span>
-             </div>
-          </div>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em]">Context-Aware Evasion</h3>
+          <span className="text-[9px] text-blue-500 font-bold uppercase">{visibleMethods.length} ACTIVE METHODS</span>
+        </div>
+        
+        <div className="grid grid-cols-1 gap-3">
+          {visibleMethods.length > 0 ? (
+            visibleMethods.map((m, i) => (
+              <ToggleItem key={i} label={m.label} desc={m.desc} />
+            ))
+          ) : (
+            <div className="p-6 bg-orange-500/5 border border-orange-500/10 rounded-xl flex flex-col items-center text-center gap-2">
+              <Lock size={20} className="text-orange-500" />
+              <p className="text-xs text-orange-200/60 font-medium">Enable Language Runtimes in the Plugins tab to unlock specialized evasion techniques.</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-const IdField: React.FC<{ icon: React.ReactNode, label: string, value: string }> = ({ icon, label, value }) => (
-  <div className="group">
-    <div className="flex items-center gap-2 mb-1.5">
-      <div className="text-zinc-500">{icon}</div>
-      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{label}</span>
-    </div>
-    <div className="bg-black/30 border border-white/5 p-3 rounded-lg font-mono text-xs text-blue-200/80 tracking-tight group-hover:border-blue-500/30 transition-colors">
-      {value}
-    </div>
-  </div>
-);
-
-const ToggleItem: React.FC<{ label: string, initialValue: boolean }> = ({ label, initialValue }) => {
-  const [val, setVal] = useState(initialValue);
+const ToggleItem: React.FC<{ label: string, desc: string }> = ({ label, desc }) => {
+  const [val, setVal] = useState(true);
   return (
-    <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:border-white/10 transition-colors cursor-pointer" onClick={() => setVal(!val)}>
-      <span className="text-sm font-medium text-zinc-300">{label}</span>
-      <div className={`w-10 h-5 rounded-full relative transition-colors ${val ? 'bg-blue-600 shadow-[0_0_10px_#3b82f644]' : 'bg-zinc-800'}`}>
-        <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${val ? 'left-6' : 'left-1'}`} />
+    <div className="flex items-center justify-between p-4 bg-[#141417] border border-white/5 rounded-xl cursor-pointer hover:border-white/10 transition-colors" onClick={() => setVal(!val)}>
+      <div className="space-y-0.5">
+        <h4 className="text-xs font-bold text-zinc-200">{label}</h4>
+        <p className="text-[10px] text-zinc-500">{desc}</p>
+      </div>
+      <div className={`w-8 h-4 rounded-full relative transition-colors shrink-0 ml-4 ${val ? 'bg-blue-600' : 'bg-zinc-800'}`}>
+        <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${val ? 'left-4.5' : 'left-0.5'}`} />
       </div>
     </div>
   );

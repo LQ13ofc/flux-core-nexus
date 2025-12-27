@@ -1,167 +1,171 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Zap, 
-  Terminal, 
-  Cpu, 
-  HardDrive, 
+  Target, 
   ShieldCheck, 
-  Activity, 
-  ArrowRight,
-  Monitor,
-  Database,
-  Search
+  ChevronRight,
+  EyeOff,
+  Search,
+  RefreshCw
 } from 'lucide-react';
 import { SystemStats } from '../types';
 
 interface DashboardProps {
   stats: SystemStats;
-  onInject: () => void;
-  isInjecting: boolean;
+  onDeploy: () => void;
+  isDeploying: boolean;
+  onTargetChange: (name: string) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ stats, onInject, isInjecting }) => {
+const Dashboard: React.FC<DashboardProps> = ({ stats, onDeploy, isDeploying, onTargetChange }) => {
+  const [isScanning, setIsScanning] = useState(false);
+  const [showProcessList, setShowProcessList] = useState(false);
+  
+  // Simulated list of open applications
+  const [mockProcesses, setMockProcesses] = useState([
+    'RobloxPlayerBeta.exe',
+    'Discord.exe',
+    'Spotify.exe',
+    'Chrome.exe',
+    'Minecraft.Launcher.exe',
+    'GTA5.exe',
+    'Steam.exe'
+  ]);
+
+  const handleScan = () => {
+    setIsScanning(true);
+    // Simulate a brief scan delay
+    setTimeout(() => {
+      setIsScanning(false);
+      setShowProcessList(true);
+    }, 800);
+  };
+
+  const selectProcess = (name: string) => {
+    onTargetChange(name);
+    setShowProcessList(false);
+  };
+
   return (
-    <div className="p-8 space-y-8 max-w-7xl mx-auto">
+    <div className="p-6 space-y-6 max-w-3xl mx-auto">
       <div className="flex flex-col gap-1">
-        <h2 className="text-3xl font-bold text-white tracking-tight">System Overview</h2>
-        <p className="text-zinc-500">Real-time telemetry and execution environment status.</p>
+        <h2 className="text-xl font-bold text-white tracking-tight">Flux Control</h2>
+        <p className="text-zinc-500 text-xs">Simpler, faster, stealthier.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard 
-          icon={<Monitor className="text-blue-500" />} 
-          label="Target Process" 
-          value={stats.targetProcess} 
-          subValue="Ready for Mapping" 
-        />
-        <StatCard 
-          icon={<Cpu className="text-purple-500" />} 
-          label="Processor Load" 
-          value={`${stats.cpu}%`} 
-          subValue="Kernel Mode Active" 
-        />
-        <StatCard 
-          icon={<HardDrive className="text-emerald-500" />} 
-          label="Memory Usage" 
-          value={`${stats.memory} MB`} 
-          subValue="Stealth Allocation" 
-        />
-        <StatCard 
-          icon={<Activity className="text-orange-500" />} 
-          label="Execution Status" 
-          value={stats.processStatus} 
-          subValue="Pipeline Clean" 
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Action Area */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-[#121216] border border-white/5 rounded-2xl p-8 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 blur-[80px] -mr-32 -mt-32 transition-opacity group-hover:opacity-100 opacity-50" />
-            
-            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
-              <div className="space-y-4 max-w-md">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-600/10 border border-blue-600/20">
-                  <Zap size={14} className="text-blue-500" fill="currentColor" />
-                  <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Trinity Stack V2</span>
-                </div>
-                <h3 className="text-2xl font-bold text-white">Initialize Ghost Injection</h3>
-                <p className="text-zinc-400 text-sm leading-relaxed">
-                  Start the 7-phase manual mapping sequence. This operation will bypass Hyperion vigilance, strip PE metadata, and allocate stealth memory.
-                </p>
-                <button 
-                  onClick={onInject}
-                  disabled={isInjecting || stats.processStatus === 'ACTIVE'}
-                  className="px-6 py-3 bg-white text-black font-bold rounded-xl flex items-center gap-3 hover:bg-blue-500 hover:text-white transition-all transform active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
-                >
-                  {isInjecting ? 'Mapping Memory...' : 'Deploy Blueprint Supremo'}
-                  <ArrowRight size={18} />
-                </button>
-              </div>
-              <div className="flex flex-col items-center justify-center p-6 bg-black/40 rounded-2xl border border-white/5 backdrop-blur-sm min-w-[200px]">
-                <div className="w-16 h-16 rounded-full border-4 border-zinc-800 border-t-blue-500 animate-spin flex items-center justify-center mb-4">
-                  <ShieldCheck size={24} className="text-blue-500" />
-                </div>
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-tighter">Security Hash</span>
-                <span className="text-xs font-mono text-zinc-300">0x7F2A...E912</span>
-              </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Process Search/Select Card */}
+        <div className="bg-[#141417] border border-white/5 p-4 rounded-xl relative">
+          <div className="flex items-center justify-between mb-3 text-zinc-500">
+            <div className="flex items-center gap-2">
+              <Target size={12} />
+              <span className="text-[10px] font-bold uppercase tracking-widest">Active Target</span>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <FeatureCard 
-                title="AOB Scanner" 
-                desc="Automated address scanning for Luau VM discovery."
-                icon={<Search size={18} />}
-             />
-             <FeatureCard 
-                title="Bytecode Encryption" 
-                desc="AES-GCM encryption for outbound script payloads."
-                icon={<Database size={18} />}
-             />
-          </div>
-        </div>
-
-        {/* Status Feed */}
-        <div className="bg-[#121216] border border-white/5 rounded-2xl p-6 flex flex-col gap-6">
-          <div className="flex items-center justify-between">
-            <h4 className="font-bold text-white">Watchdog Bypass</h4>
-            <div className="px-2 py-0.5 rounded bg-green-500/10 text-green-500 text-[10px] font-bold">STABLE</div>
+            <button 
+              onClick={handleScan}
+              className="p-1 hover:bg-white/5 rounded transition-colors text-blue-500"
+              title="Scan processes"
+            >
+              <RefreshCw size={12} className={isScanning ? 'animate-spin' : ''} />
+            </button>
           </div>
           
-          <div className="space-y-4">
-            <WatchdogItem label="Hyperion Vigilance" status="BYPASSED" />
-            <WatchdogItem label="Byfron Guardian" status="BYPASSED" />
-            <WatchdogItem label="Vanguard Sentinel" status="READY" />
-            <WatchdogItem label="Thread Spoofing" status="ACTIVE" />
+          <div 
+            onClick={() => setShowProcessList(!showProcessList)}
+            className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm font-mono text-blue-400 flex items-center justify-between cursor-pointer hover:border-blue-500/30 transition-all"
+          >
+            <span>{stats.targetProcess || 'Select a process...'}</span>
+            <Search size={14} className="text-zinc-600" />
           </div>
 
-          <div className="mt-auto p-4 bg-blue-600/5 rounded-xl border border-blue-600/10">
-            <div className="flex items-center gap-3 mb-2">
-              <Activity size={16} className="text-blue-500" />
-              <span className="text-xs font-bold text-white">Heartbeat</span>
-            </div>
-            <div className="flex gap-1 h-8 items-end">
-              {[40, 70, 45, 90, 65, 80, 40, 60, 85, 50, 75, 95, 45, 60].map((h, i) => (
-                <div key={i} className="flex-1 bg-blue-500/30 rounded-t-sm" style={{ height: `${h}%` }} />
+          {/* Process Dropdown/Modal */}
+          {showProcessList && (
+            <div className="absolute left-0 right-0 top-full mt-2 bg-[#1a1a1f] border border-white/10 rounded-lg shadow-2xl z-50 max-h-48 overflow-y-auto">
+              <div className="p-2 border-b border-white/5 text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Open Applications Found:</div>
+              {mockProcesses.map((proc) => (
+                <button
+                  key={proc}
+                  onClick={() => selectProcess(proc)}
+                  className="w-full text-left px-4 py-2.5 text-xs font-mono text-zinc-300 hover:bg-blue-600/20 hover:text-blue-400 transition-colors border-b border-white/[0.02] last:border-0"
+                >
+                  {proc}
+                </button>
               ))}
             </div>
-          </div>
+          )}
         </div>
+
+        {/* Status Card */}
+        <div className="bg-[#141417] border border-white/5 p-4 rounded-xl flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">System State</span>
+            <div className="flex items-center gap-2">
+              <div className={`w-1.5 h-1.5 rounded-full ${stats.processStatus === 'ACTIVE' ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-red-500'}`} />
+              <span className={`text-sm font-bold uppercase ${stats.processStatus === 'ACTIVE' ? 'text-green-500' : 'text-zinc-500'}`}>
+                {stats.processStatus}
+              </span>
+            </div>
+          </div>
+          <ShieldCheck size={24} className={stats.processStatus === 'ACTIVE' ? 'text-green-500' : 'text-zinc-800'} />
+        </div>
+      </div>
+
+      {/* Deploy Stealth Button Area */}
+      <div className="bg-[#121215] border border-white/5 rounded-2xl p-8 flex flex-col items-center text-center space-y-6">
+        <div className={`w-12 h-12 bg-blue-600/10 rounded-xl flex items-center justify-center text-blue-500 ${isDeploying ? 'animate-pulse' : ''}`}>
+          <Zap size={24} fill="currentColor" />
+        </div>
+        
+        <div className="space-y-1">
+          <h3 className="text-lg font-bold text-white">Stealth Deployment</h3>
+          <p className="text-zinc-500 text-[11px] max-w-xs mx-auto leading-relaxed">
+            Automatically bypasses Hyperion/Byfron and establishes a silent kernel link.
+          </p>
+        </div>
+
+        <button 
+          onClick={onDeploy}
+          disabled={isDeploying || stats.processStatus === 'ACTIVE' || !stats.targetProcess}
+          className={`w-full max-w-xs flex items-center justify-center gap-3 py-3.5 rounded-xl font-bold transition-all text-xs tracking-widest uppercase ${
+            stats.processStatus === 'ACTIVE' 
+            ? 'bg-green-600/10 text-green-500 border border-green-600/30' 
+            : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg'
+          } disabled:opacity-30 disabled:grayscale`}
+        >
+          {isDeploying ? (
+            <>
+              <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+              <span>Mapping Memory...</span>
+            </>
+          ) : stats.processStatus === 'ACTIVE' ? (
+            <>
+              <ShieldCheck size={14} />
+              <span>Active & Hidden</span>
+            </>
+          ) : (
+            <>
+              <EyeOff size={14} />
+              <span>Deploy Stealth</span>
+              <ChevronRight size={12} />
+            </>
+          )}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <StatusPill label="Bypass" value="Auto-V3" />
+        <StatusPill label="Stability" value="99%" />
+        <StatusPill label="Engine" value="Flux-VM" />
       </div>
     </div>
   );
 };
 
-const StatCard: React.FC<{ icon: React.ReactNode, label: string, value: string, subValue: string }> = ({ icon, label, value, subValue }) => (
-  <div className="bg-[#121216] border border-white/5 p-5 rounded-2xl hover:border-white/10 transition-colors">
-    <div className="flex items-center gap-3 mb-4">
-      <div className="p-2 bg-white/5 rounded-lg">{icon}</div>
-      <span className="text-xs font-semibold text-zinc-500 uppercase tracking-tight">{label}</span>
-    </div>
-    <div className="text-2xl font-bold text-white mb-1">{value}</div>
-    <div className="text-[10px] font-mono text-zinc-500">{subValue}</div>
-  </div>
-);
-
-const FeatureCard: React.FC<{ title: string, desc: string, icon: React.ReactNode }> = ({ title, desc, icon }) => (
-  <div className="p-5 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer flex gap-4">
-    <div className="shrink-0 w-10 h-10 rounded-lg bg-black flex items-center justify-center text-blue-500">
-      {icon}
-    </div>
-    <div>
-      <h5 className="text-sm font-bold text-white mb-1">{title}</h5>
-      <p className="text-xs text-zinc-500 leading-tight">{desc}</p>
-    </div>
-  </div>
-);
-
-const WatchdogItem: React.FC<{ label: string, status: string }> = ({ label, status }) => (
-  <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5">
-    <span className="text-xs text-zinc-400 font-medium">{label}</span>
-    <span className={`text-[10px] font-mono font-bold ${status === 'BYPASSED' ? 'text-blue-400' : status === 'ACTIVE' ? 'text-green-500' : 'text-zinc-500'}`}>{status}</span>
+const StatusPill: React.FC<{ label: string, value: string }> = ({ label, value }) => (
+  <div className="py-2.5 px-3 bg-white/[0.02] border border-white/[0.05] rounded-lg text-center">
+    <span className="text-[8px] text-zinc-600 font-bold block uppercase tracking-tighter">{label}</span>
+    <span className="text-[10px] font-bold text-zinc-400">{value}</span>
   </div>
 );
 

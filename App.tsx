@@ -1,41 +1,35 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Activity, 
-  Code2, 
-  ShieldAlert, 
-  Terminal, 
-  Settings, 
-  Cpu, 
-  HardDrive, 
-  Zap, 
-  CheckCircle2, 
-  AlertCircle,
-  Play,
-  Trash2,
-  Bug,
-  LayoutDashboard
-} from 'lucide-react';
+import React, { useState, useCallback, useMemo } from 'react';
+import { Terminal, Zap } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import ScriptEditor from './components/ScriptEditor';
 import SecuritySuite from './components/SecuritySuite';
+import PluginsPanel from './components/PluginsPanel';
 import ConsoleLogs from './components/ConsoleLogs';
-import SettingsPanel from './components/SettingsPanel';
-import { AppView, SystemStats, LogEntry } from './types';
+import { AppView, SystemStats, LogEntry, PluginModule } from './types';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.DASHBOARD);
   const [stats, setStats] = useState<SystemStats>({
-    cpu: 0,
-    memory: 0,
     processStatus: 'INACTIVE',
-    targetProcess: 'RobloxPlayerBeta.exe'
+    targetProcess: ''
   });
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [isInjecting, setIsInjecting] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
 
-  // Add a log helper
+  // Lifted Plugin State
+  const [plugins, setPlugins] = useState<PluginModule[]>([
+    { id: 'lua', name: 'Lua / Luau Runtime', description: 'Native game execution engine.', type: 'Engine', enabled: true },
+    { id: 'python', name: 'Python Bridge', description: 'Embedded CPython interpreter.', type: 'Wrapper', enabled: false },
+    { id: 'js', name: 'JavaScript V8 Core', description: 'V8 integration layer.', type: 'Engine', enabled: false },
+    { id: 'csharp', name: 'C# / Mono Wrapper', description: '.NET execution layer.', type: 'Wrapper', enabled: false },
+    { id: 'cpp', name: 'C++ Native Linker', description: 'Direct call-gate to native DLL exports.', type: 'Engine', enabled: false },
+    { id: 'c', name: 'C Standard Library', description: 'Essential system calls and raw memory access.', type: 'Wrapper', enabled: false }
+  ]);
+
+  const enabledPlugins = useMemo(() => plugins.filter(p => p.enabled), [plugins]);
+
   const addLog = useCallback((message: string, level: LogEntry['level'] = 'INFO', category: string = 'SYSTEM') => {
     const newLog: LogEntry = {
       id: Math.random().toString(36).substr(2, 9),
@@ -44,130 +38,72 @@ const App: React.FC = () => {
       message,
       category
     };
-    setLogs(prev => [newLog, ...prev].slice(0, 100));
+    setLogs(prev => [newLog, ...prev].slice(0, 40));
   }, []);
 
-  // Simulate system activity
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setStats(prev => ({
-        ...prev,
-        cpu: Math.floor(Math.random() * 5) + 2,
-        memory: Math.floor(Math.random() * 100) + 450
-      }));
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleInject = () => {
-    if (isInjecting) return;
+  const handleDeployStealth = () => {
+    if (isDeploying || stats.processStatus === 'ACTIVE' || !stats.targetProcess) return;
     
-    setIsInjecting(true);
-    addLog('Initialization of Trinity Stack Sequence...', 'INFO', 'INJECTOR');
+    setIsDeploying(true);
+    addLog(`Initiating stealth link with ${stats.targetProcess}...`, 'INFO', 'CORE');
     
-    // Simulate phases from the manual
-    const phases = [
-      'Stripping PE Metadata...',
-      'Allocating Stealth Memory...',
-      'Mapping Sections (PAGE_EXECUTE_READ)...',
-      'Resolving Obfuscated Imports...',
-      'Applying Relocations...',
-      'Executing Shellcode Stub...',
-      'Eradicating Injection Traces...'
-    ];
-
-    phases.forEach((phase, index) => {
+    setTimeout(() => {
+      addLog('Bypassing watchdog sentinels...', 'INFO', 'STEALTH');
       setTimeout(() => {
-        addLog(`Phase ${index + 1}: ${phase}`, 'INFO', 'INJECTOR');
-        if (index === phases.length - 1) {
-          setIsInjecting(false);
-          setStats(prev => ({ ...prev, processStatus: 'ACTIVE' }));
-          addLog('BluePrint Supremo Environment Active', 'SUCCESS', 'KERNEL');
-        }
-      }, (index + 1) * 800);
-    });
+        addLog('Flux Core stealth link established.', 'SUCCESS', 'KERNEL');
+        setStats(prev => ({ ...prev, processStatus: 'ACTIVE' }));
+        setIsDeploying(false);
+      }, 1200);
+    }, 800);
+  };
+
+  const updateTarget = (name: string) => {
+    setStats(prev => ({ ...prev, targetProcess: name }));
+    if (name) addLog(`Target set to: ${name}`, 'INFO', 'CONFIG');
   };
 
   const renderView = () => {
     switch (currentView) {
       case AppView.DASHBOARD:
-        return <Dashboard stats={stats} onInject={handleInject} isInjecting={isInjecting} />;
+        return <Dashboard stats={stats} onDeploy={handleDeployStealth} isDeploying={isDeploying} onTargetChange={updateTarget} />;
       case AppView.EDITOR:
-        return <ScriptEditor addLog={addLog} />;
+        return <ScriptEditor addLog={addLog} enabledPlugins={enabledPlugins} />;
       case AppView.SECURITY:
-        return <SecuritySuite addLog={addLog} />;
+        return <SecuritySuite addLog={addLog} enabledPlugins={enabledPlugins} />;
+      case AppView.PLUGINS:
+        return <PluginsPanel addLog={addLog} plugins={plugins} setPlugins={setPlugins} />;
       case AppView.LOGS:
         return <ConsoleLogs logs={logs} clearLogs={() => setLogs([])} />;
-      case AppView.SETTINGS:
-        return <SettingsPanel />;
       default:
-        return <Dashboard stats={stats} onInject={handleInject} isInjecting={isInjecting} />;
+        return <Dashboard stats={stats} onDeploy={handleDeployStealth} isDeploying={isDeploying} onTargetChange={updateTarget} />;
     }
   };
 
   return (
-    <div className="flex h-screen w-full bg-[#0a0a0c] text-zinc-300 font-sans selection:bg-blue-500/30">
-      <Sidebar currentView={currentView} setView={setCurrentView} status={stats.processStatus} />
+    <div className="flex h-screen w-full bg-[#0d0d0f] text-zinc-300 font-sans selection:bg-blue-500/30 overflow-hidden">
+      <Sidebar currentView={currentView} setView={setCurrentView} />
       
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top Header */}
-        <header className="h-14 border-b border-white/5 flex items-center justify-between px-6 glass shrink-0">
+        <header className="h-10 border-b border-white/5 flex items-center justify-between px-6 bg-[#111114] shrink-0">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${stats.processStatus === 'ACTIVE' ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-red-500'} animate-pulse`} />
-              <span className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
-                Status: {stats.processStatus}
-              </span>
-            </div>
-            <div className="h-4 w-[1px] bg-white/10" />
-            <span className="text-xs font-mono text-blue-400">Target: {stats.targetProcess}</span>
+            <div className={`w-1.5 h-1.5 rounded-full ${stats.processStatus === 'ACTIVE' ? 'bg-green-500' : 'bg-red-500'} ${isDeploying ? 'animate-pulse' : ''}`} />
+            <span className="text-[9px] font-bold tracking-widest text-zinc-600 uppercase">
+              {isDeploying ? 'Stealth Link in Progress' : `Status: ${stats.processStatus}`}
+            </span>
           </div>
-
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-4 text-xs font-mono">
-              <div className="flex items-center gap-2">
-                <Cpu size={14} className="text-zinc-500" />
-                <span>CPU: {stats.cpu}%</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <HardDrive size={14} className="text-zinc-500" />
-                <span>MEM: {stats.memory}MB</span>
-              </div>
-            </div>
-            <button 
-              onClick={handleInject}
-              disabled={isInjecting || stats.processStatus === 'ACTIVE'}
-              className={`px-4 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-2 ${
-                isInjecting ? 'bg-zinc-800 text-zinc-500' : 
-                stats.processStatus === 'ACTIVE' ? 'bg-green-600/20 text-green-400 border border-green-600/30' : 
-                'bg-blue-600 hover:bg-blue-500 text-white shadow-lg glow-blue'
-              }`}
-            >
-              {isInjecting ? (
-                <div className="w-3 h-3 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Zap size={14} fill="currentColor" />
-              )}
-              {isInjecting ? 'INJECTING...' : stats.processStatus === 'ACTIVE' ? 'ATTACHED' : 'INJECT'}
-            </button>
-          </div>
+          <span className="text-[9px] font-mono text-zinc-700">FLUX_STELTH_v2</span>
         </header>
 
-        {/* View Content */}
-        <div className="flex-1 overflow-auto bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-blue-900/5 via-transparent to-transparent">
+        <div className="flex-1 overflow-auto bg-[#0d0d0f]">
           {renderView()}
         </div>
 
-        {/* Quick Log Footer */}
-        <footer className="h-8 border-t border-white/5 bg-[#0d0d11] flex items-center px-4 justify-between shrink-0">
+        <footer className="h-6 border-t border-white/5 bg-[#09090b] flex items-center px-4 justify-between shrink-0">
           <div className="flex items-center gap-2">
-            <Terminal size={12} className="text-blue-500" />
-            <span className="text-[10px] font-mono text-zinc-500 truncate max-w-md">
-              {logs[0]?.message || 'System ready for deployment...'}
+            <Terminal size={10} className="text-blue-500" />
+            <span className="text-[8px] font-mono text-zinc-700 truncate">
+              {logs[0]?.message || 'Awaiting target selection...'}
             </span>
-          </div>
-          <div className="text-[10px] text-zinc-600 font-mono">
-            V.2.4.8 STABLE | HYPERION BYPASS LOADED
           </div>
         </footer>
       </main>

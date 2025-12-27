@@ -1,154 +1,121 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Play, 
-  Trash2, 
-  Bug, 
-  Save, 
-  FileCode, 
-  Sparkles,
-  Search,
-  ChevronRight
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Play, Trash2, Sparkles, FileCode, ChevronDown } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
+import { PluginModule, LanguageRuntime } from '../types';
 
 interface ScriptEditorProps {
   addLog: (msg: string, level?: any, cat?: string) => void;
+  enabledPlugins: PluginModule[];
 }
 
-const ScriptEditor: React.FC<ScriptEditorProps> = ({ addLog }) => {
-  const [code, setCode] = useState<string>(`-- BluePrint Supremo Default Script
--- Luau VM Interaction Module
-
-local function InitializeBypass()
-    print("Initializing environment...")
-    cheat.readMemory(0x0, 100) -- Internal C Call simulation
-end
-
-InitializeBypass()
-print("Hello, user! Ready to execute.")`);
-
+const ScriptEditor: React.FC<ScriptEditorProps> = ({ addLog, enabledPlugins }) => {
+  const [code, setCode] = useState<string>(`-- Flux Core v2\n-- Detecting environment...\n\nprint("Script engine ready.")`);
   const [isFixing, setIsFixing] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [selectedRuntime, setSelectedRuntime] = useState<LanguageRuntime>('auto');
+
+  const detectLanguage = (text: string): LanguageRuntime => {
+    const enabledIds = enabledPlugins.map(p => p.id);
+    if (enabledIds.length === 0) return 'lua'; // Fallback
+    
+    // Very simple detection logic
+    if (text.includes('import ') || text.includes('def ')) return enabledIds.includes('python') ? 'python' : enabledIds[0];
+    if (text.includes('using ') || text.includes('namespace ')) return enabledIds.includes('csharp') ? 'csharp' : enabledIds[0];
+    if (text.includes('#include ')) return enabledIds.includes('cpp') ? 'cpp' : enabledIds[0];
+    if (text.includes('function') && text.includes('{')) return enabledIds.includes('js') ? 'js' : enabledIds[0];
+    
+    return enabledIds.includes('lua') ? 'lua' : enabledIds[0];
+  };
+
+  const currentRuntime = selectedRuntime === 'auto' ? detectLanguage(code) : selectedRuntime;
 
   const handleExecute = () => {
-    addLog('Pre-processing script for bytecode conversion...', 'INFO', 'LUA_VM');
+    addLog(`Running ${currentRuntime.toUpperCase()} script through Flux-VM...`, 'INFO', 'CORE');
     setTimeout(() => {
-      addLog('Injecting payload into target VM state...', 'INFO', 'LUA_VM');
-      addLog('Execution successful. Returned status LUA_OK', 'SUCCESS', 'LUA_VM');
-    }, 1200);
+      addLog(`${currentRuntime.toUpperCase()} execution complete.`, 'SUCCESS', 'RUNTIME');
+    }, 600);
   };
 
   const fixWithAI = async () => {
     if (!code.trim()) return;
     setIsFixing(true);
-    addLog('Gemini AI analyzing script for vulnerabilities and errors...', 'INFO', 'AI_DEBUGGER');
+    addLog(`AI analyzing ${currentRuntime} script...`, 'INFO', 'GEMINI');
     
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `You are an expert Luau/Lua developer for game exploitation. 
-        Optimize this script for performance and detect any potential anti-cheat triggers. 
-        Return ONLY the updated Lua code, no explanation. 
-        Script:
-        ${code}`,
+        contents: `Optimize this ${currentRuntime} script for game execution. Ensure stability. Return ONLY code.\n\n${code}`,
       });
-
-      const fixedCode = response.text || code;
-      setCode(fixedCode);
-      addLog('Gemini AI: Optimization and bug-fixing complete.', 'SUCCESS', 'AI_DEBUGGER');
+      setCode(response.text || code);
+      addLog('AI optimization applied.', 'SUCCESS', 'GEMINI');
     } catch (err) {
-      addLog('Failed to connect to Gemini AI services.', 'ERROR', 'AI_DEBUGGER');
+      addLog('AI services offline.', 'ERROR', 'GEMINI');
     } finally {
       setIsFixing(false);
     }
   };
 
-  const lineCount = code.split('\n').length;
-
   return (
-    <div className="h-full flex flex-col p-4">
+    <div className="h-full flex flex-col p-4 bg-[#0d0d0f]">
       {/* Editor Header */}
-      <div className="flex items-center justify-between mb-4 bg-[#121216] p-2 rounded-xl border border-white/5">
+      <div className="flex items-center justify-between mb-3 bg-[#141417] p-2 rounded-lg border border-white/5">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-lg">
+          <div className="flex items-center gap-2 px-3">
             <FileCode size={14} className="text-blue-500" />
-            <span className="text-xs font-bold text-white">main.lua</span>
+            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-tighter">
+              {currentRuntime}.{currentRuntime === 'python' ? 'py' : currentRuntime === 'csharp' ? 'cs' : currentRuntime === 'cpp' ? 'cpp' : 'lua'}
+            </span>
           </div>
-          <button className="text-zinc-500 hover:text-white transition-colors">
-            <Save size={16} />
-          </button>
+          
+          {/* Runtime Selector */}
+          <div className="relative flex items-center gap-2">
+            <span className="text-[9px] text-zinc-600 font-bold uppercase">Runtime:</span>
+            <select 
+              value={selectedRuntime}
+              onChange={(e) => setSelectedRuntime(e.target.value as LanguageRuntime)}
+              className="bg-black/40 border border-white/10 rounded px-2 py-1 text-[10px] font-bold text-blue-400 outline-none hover:border-blue-500/30 transition-all appearance-none pr-6"
+            >
+              <option value="auto">Automatic</option>
+              {enabledPlugins.map(p => (
+                <option key={p.id} value={p.id}>{p.name.split(' ')[0]}</option>
+              ))}
+            </select>
+            <ChevronDown size={10} className="absolute right-1 text-zinc-600 pointer-events-none" />
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <button 
-            onClick={fixWithAI}
-            disabled={isFixing}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-600/10 text-purple-400 border border-purple-600/20 hover:bg-purple-600/20 transition-all text-xs font-bold disabled:opacity-50"
-          >
-            {isFixing ? (
-              <div className="w-3 h-3 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Sparkles size={14} fill="currentColor" />
-            )}
-            {isFixing ? 'AI Analyzing...' : 'AI Fix & Optimize'}
+          <button onClick={fixWithAI} disabled={isFixing} className="p-1.5 text-purple-400 hover:bg-purple-400/10 rounded transition-colors" title="AI Optimize">
+            <Sparkles size={16} />
           </button>
-          
-          <button 
-            onClick={() => setCode('')}
-            className="p-2 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
-          >
+          <button onClick={() => setCode('')} className="p-1.5 text-zinc-500 hover:text-red-500 rounded transition-colors" title="Clear">
             <Trash2 size={16} />
           </button>
-
           <div className="w-[1px] h-4 bg-white/10 mx-1" />
-
-          <button 
-            onClick={handleExecute}
-            className="flex items-center gap-2 px-5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all text-xs font-bold glow-blue shadow-lg"
-          >
-            <Play size={14} fill="currentColor" />
-            Run Script
+          <button onClick={handleExecute} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold text-[11px] flex items-center gap-2">
+            <Play size={12} fill="currentColor" />
+            EXECUTE
           </button>
         </div>
       </div>
 
-      {/* Editor Body */}
-      <div className="flex-1 flex overflow-hidden bg-[#0d0d11] rounded-2xl border border-white/5 shadow-2xl relative">
-        {/* Line Numbers */}
-        <div className="w-12 bg-black/40 border-r border-white/5 flex flex-col items-end pt-4 pr-3 text-[11px] font-mono text-zinc-600 select-none">
-          {Array.from({ length: Math.max(lineCount, 30) }).map((_, i) => (
-            <div key={i} className="h-[21px]">{i + 1}</div>
-          ))}
-        </div>
-
-        {/* Text Area */}
-        <div className="flex-1 relative group">
-          <textarea
-            ref={textareaRef}
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            spellCheck={false}
-            className="w-full h-full bg-transparent p-4 text-sm font-mono text-blue-100/90 outline-none resize-none leading-[21px] selection:bg-blue-500/20"
-            placeholder="-- Paste your Lua script here..."
-          />
-          {/* Subtle Glow Overlay */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 blur-[60px] pointer-events-none group-focus-within:opacity-100 opacity-30 transition-opacity" />
-        </div>
-      </div>
-
-      {/* Bottom Info Bar */}
-      <div className="mt-3 flex items-center justify-between px-2 text-[10px] font-mono text-zinc-500">
-        <div className="flex items-center gap-4">
-          <span>LINES: {lineCount}</span>
-          <span>MODE: LUAU-LITE</span>
-          <span>UTF-8</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-500/50" />
-          <span>LUA_STATE RETRIEVED @ 0x7FF8...</span>
-        </div>
+      <div className="flex-1 bg-[#09090b] rounded-lg border border-white/5 flex relative">
+        <textarea
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          spellCheck={false}
+          className="w-full h-full bg-transparent p-4 text-xs font-mono text-zinc-300 outline-none resize-none leading-relaxed"
+          placeholder="-- Write your code here..."
+        />
+        {enabledPlugins.length === 0 && (
+           <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-[2px] rounded-lg">
+             <div className="text-center p-6 space-y-2">
+               <p className="text-xs font-bold text-orange-500">No Runtimes Enabled</p>
+               <p className="text-[10px] text-zinc-500">Go to the Plugins tab to install a language engine first.</p>
+             </div>
+           </div>
+        )}
       </div>
     </div>
   );
