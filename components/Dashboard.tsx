@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Zap, Target, Search, RefreshCw, Activity,
-  FileCode, FolderOpen, PlayCircle, Ghost, ShieldAlert
+  FileCode, FolderOpen, PlayCircle, Ghost, ShieldAlert, AlertTriangle
 } from 'lucide-react';
 import { SystemStats, ProcessInfo, AppSettings } from '../types';
 
@@ -35,9 +35,13 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
             } else {
                 addLog('System Scan returned invalid data structure.', 'ERROR', 'SYSTEM');
             }
-        } catch (e) {
-            addLog('Failed to retrieve process list.', 'ERROR', 'SYSTEM');
-            console.error(e);
+        } catch (e: any) {
+            // Error string is now robustly passed from main process
+            const errorMsg = e.message || e.toString();
+            if (!errorMsg.includes("Tasklist failed") && !errorMsg.includes("PS failed")) {
+                 addLog(`Scan Error: ${errorMsg}`, 'ERROR', 'SYSTEM');
+            }
+            setProcesses([]); 
         }
     } else {
         // Fallback visual apenas para navegador
@@ -58,10 +62,14 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
   const handleSelectDll = async () => {
     if ((window as any).require) {
         const { ipcRenderer } = (window as any).require('electron');
-        const path = await ipcRenderer.invoke('select-dll');
-        if (path) {
-            setStats(prev => ({ ...prev, target: { ...prev.target, dllPath: path } }));
-            addLog(`Custom Payload Loaded: ${path.split(/[/\\]/).pop()}`, 'INFO', 'LOADER');
+        try {
+            const path = await ipcRenderer.invoke('select-dll');
+            if (path) {
+                setStats(prev => ({ ...prev, target: { ...prev.target, dllPath: path } }));
+                addLog(`Custom Payload Loaded: ${path.split(/[/\\]/).pop()}`, 'INFO', 'LOADER');
+            }
+        } catch (e: any) {
+            addLog(`Dialog Error: ${e.message}`, 'ERROR', 'UI');
         }
     }
   };
@@ -127,6 +135,8 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
     p.pid.toString().includes(searchFilter)
   );
 
+  const isOsMismatch = stats.target.process?.name.endsWith('.exe') && stats.currentPlatform !== 'win32';
+
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto pb-20 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
@@ -168,6 +178,12 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
                                 <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] animate-pulse" />
                                 <span className="text-white truncate">{stats.target.process.name}</span>
                                 <span className="text-zinc-500 text-xs ml-2">({stats.target.process.pid})</span>
+                                {isOsMismatch && (
+                                    <div className="ml-auto flex items-center gap-1 text-orange-500" title="Warning: Target is a Windows executable but you are on Unix. Injection may fail without Wine/Proton.">
+                                        <AlertTriangle size={12} />
+                                        <span className="text-[9px] font-bold hidden sm:inline">COMPAT RISK</span>
+                                    </div>
+                                )}
                             </>
                         ) : (
                             <span className="text-zinc-500 italic">Click to select process...</span>

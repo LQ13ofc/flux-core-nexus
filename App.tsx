@@ -65,7 +65,8 @@ const INITIAL_GAME_LIBRARY: GamePack[] = [
           { id: 'g7', name: 'Vehicle God Mode', enabled: false, code: 'ENTITY::SET_ENTITY_INVINCIBLE(PED::GET_VEHICLE_PED_IS_IN(PLAYER::PLAYER_PED_ID(), false), true);' },
           { id: 'g8', name: 'Spawn Adder', enabled: false, code: 'VEHICLE::CREATE_VEHICLE(0xB779A091, coords, 0.0, true, false);' },
           { id: 'g9', name: 'Teleport Waypoint', enabled: false, code: 'Vector3 wp = GET_WAYPOINT_COORDS(); ENTITY::SET_ENTITY_COORDS(PLAYER::PLAYER_PED_ID(), wp.x, wp.y, wp.z, 0, 0, 0, false);' },
-          { id: 'g10', name: 'Model Changer', enabled: false, code: 'PLAYER::SET_PLAYER_MODEL(PLAYER::PLAYER_ID(), modelHash);' }
+          { id: 'g10', name: 'Model Changer', enabled: false, code: 'PLAYER::SET_PLAYER_MODEL(PLAYER::PLAYER_ID(), modelHash);' },
+          { id: 'g11', name: 'Invisibility', enabled: false, code: 'PLAYER::SET_PLAYER_VISIBLE(PLAYER::PLAYER_ID(), false, 0);' }
       ]
   },
   {
@@ -105,7 +106,8 @@ const INITIAL_GAME_LIBRARY: GamePack[] = [
           { id: 'rd7', name: 'Horse Inf. Stamina', enabled: false, code: 'PED::_RESTORE_HORSE_STAMINA(PED::GET_MOUNT(PLAYER::PLAYER_PED_ID()), 100.0f);' },
           { id: 'rd8', name: 'Set Sunny', enabled: false, code: 'MISC::SET_WEATHER_TYPE_PERSIST(0x310D7033);' },
           { id: 'rd9', name: 'Spawn Bear', enabled: false, code: 'ENTITY::CREATE_PED(0x9484089C, coords, 0.0, true, false);' },
-          { id: 'rd10', name: 'Clean Clothes', enabled: false, code: 'PED::CLEAR_PED_BLOOD_DAMAGE(PLAYER::PLAYER_PED_ID());' }
+          { id: 'rd10', name: 'Clean Clothes', enabled: false, code: 'PED::CLEAR_PED_BLOOD_DAMAGE(PLAYER::PLAYER_PED_ID());' },
+          { id: 'rd11', name: 'Infinite Ammo', enabled: true, code: 'WEAPON::SET_PED_INFINITE_AMMO_CLIP(PLAYER::PLAYER_PED_ID(), true);' }
       ]
   },
   { 
@@ -165,7 +167,7 @@ const INITIAL_GAME_LIBRARY: GamePack[] = [
           { id: 'pz7', name: 'Reveal Map', enabled: false, code: 'getWorld():setAllExplored(true)' },
           { id: 'pz8', name: 'Spawn Axe', enabled: false, code: 'getSpecificPlayer(0):getInventory():AddItem("Base.Axe")' },
           { id: 'pz9', name: 'Carry Capacity', enabled: false, code: 'getSpecificPlayer(0):setMaxWeight(10000)' },
-          { id: 'pz10', name: 'Kill Zombies', enabled: false, code: 'local list = getCell():getZombieList(); for i=0,list:size()-1 do list:get(i):setHealth(0) end' }
+          { id: 'pz10', name: 'Kill All Zombies', enabled: false, code: 'local list = getCell():getZombieList(); for i=0,list:size()-1 do list:get(i):setHealth(0) end' }
       ]
   },
   { 
@@ -239,6 +241,8 @@ const App: React.FC = () => {
 
   // Inicialização e Detecção de Plataforma
   useEffect(() => {
+    let cleanups: (() => void)[] = [];
+
     if ((window as any).require) {
        const { ipcRenderer } = (window as any).require('electron');
        
@@ -253,16 +257,22 @@ const App: React.FC = () => {
           }
        });
 
-       ipcRenderer.on('log-entry', (_: any, log: any) => addLog(log.message, log.level, log.category));
+       const logHandler = (_: any, log: any) => addLog(log.message, log.level, log.category);
+       ipcRenderer.on('log-entry', logHandler);
+       cleanups.push(() => ipcRenderer.removeListener('log-entry', logHandler));
     } else {
         addLog("Running in Browser Simulation Mode.", "WARN", "WEB");
     }
 
     addLog("Flux Core Nexus v5.1 (Universal Stealth) Loaded.", "SUCCESS", "CORE");
     setStats(prev => ({ ...prev, pipeConnected: true }));
-  }, []);
 
-  const handleToggleScript = (gameId: string, scriptId: string) => {
+    return () => {
+        cleanups.forEach(c => c());
+    };
+  }, [addLog]); // addLog is stable via useCallback
+
+  const handleToggleScript = async (gameId: string, scriptId: string) => {
     setGameLibrary(prev => prev.map(game => {
       if (game.id === gameId) {
         return {
@@ -270,11 +280,21 @@ const App: React.FC = () => {
           scripts: game.scripts.map(s => {
             if (s.id === scriptId) {
               const newState = !s.enabled;
+              
               if (newState && s.code) {
                  addLog(`Execute [${game.name}]: ${s.name}`, 'INFO', 'EXEC');
                  if ((window as any).require) {
                     const { ipcRenderer } = (window as any).require('electron');
-                    ipcRenderer.send('execute-script', s.code);
+                    // Async invoke with error handling
+                    ipcRenderer.invoke('execute-script', s.code)
+                        .then((res: any) => {
+                            if (!res.success) {
+                                addLog(`Execution Failed: ${res.error}`, 'ERROR', 'EXEC');
+                            }
+                        })
+                        .catch((err: any) => {
+                             addLog(`Execution IPC Error: ${err.message || err}`, 'ERROR', 'EXEC');
+                        });
                  }
               }
               return { ...s, enabled: newState };

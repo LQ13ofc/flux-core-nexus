@@ -34,10 +34,12 @@ const SecuritySuite: React.FC<SecuritySuiteProps> = ({ addLog, enabledPlugins })
     // Linux Specific
     { id: 'l1', label: "eBPF Trace Blocker", desc: "Prevents kernel tracing via eBPF.", lang: ['c'], active: true, riskLevel: 'RISKY', category: 'KERNEL', platform: ['linux'] },
     { id: 'l2', label: "ptrace_scope Bypass", desc: "Modifies YAMA ptrace restrictions.", lang: ['c'], active: true, riskLevel: 'EXTREME', category: 'KERNEL', platform: ['linux'] },
+    { id: 'l3', label: "Cgroup Escape", desc: "Breaks container namespace isolation.", lang: ['c', 'go'], active: false, riskLevel: 'EXTREME', category: 'KERNEL', platform: ['linux'] },
 
     // Mac Specific
     { id: 'mc1', label: "Gatekeeper Evasion", desc: "Removes quarantine attributes.", lang: ['bash'], active: true, riskLevel: 'RISKY', category: 'HARDWARE', platform: ['darwin'] },
     { id: 'mc2', label: "SIP Status Monitor", desc: "Checks System Integrity Protection.", lang: ['swift'], active: true, riskLevel: 'SAFE', category: 'KERNEL', platform: ['darwin'] },
+    { id: 'mc3', label: "Kernel Task Port", desc: "Attempts to acquire task_for_pid(0).", lang: ['c', 'swift'], active: false, riskLevel: 'EXTREME', category: 'KERNEL', platform: ['darwin'] },
   ] as SecurityModule[]);
 
   const toggleModule = (id: string) => {

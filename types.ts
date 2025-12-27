@@ -9,7 +9,7 @@ export enum AppView {
 }
 
 export type LanguageRuntime = 'lua' | 'python' | 'js' | 'csharp' | 'cpp' | 'c' | 'asm' | 'java' | 'rust' | 'ruby' | 'swift' | 'auto';
-export type Platform = 'win32' | 'linux' | 'darwin' | 'arm64';
+export type Platform = 'win32' | 'linux' | 'darwin' | 'aix' | 'freebsd' | 'openbsd' | 'sunos'; 
 export type ComplexityMode = 'SIMPLE' | 'COMPLEX';
 
 // Métodos de injeção adaptados para Cross-Platform
@@ -28,7 +28,7 @@ export interface ProcessInfo {
   memory: string;
   session: number;
   path?: string;
-  user?: string; // Novo: Usuário dono do processo (útil para Linux/Mac)
+  user?: string; 
 }
 
 export interface InjectionTarget {
@@ -79,7 +79,7 @@ export interface SecurityModule {
   active: boolean;
   riskLevel: 'SAFE' | 'RISKY' | 'EXTREME' | 'GOD';
   category: 'MEMORY' | 'KERNEL' | 'NETWORK' | 'HARDWARE';
-  platform?: Platform[]; // Novo: Restrição de OS por módulo
+  platform?: Platform[]; 
 }
 
 export interface NetworkConfig {

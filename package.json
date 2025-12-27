@@ -1,3 +1,4 @@
+
 {
   "name": "flux-core-master",
   "version": "4.3.0",
@@ -6,9 +7,10 @@
   "author": "Nexus Dev Team",
   "license": "MIT",
   "scripts": {
+    "postinstall": "electron-builder install-app-deps",
     "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
     "start": "npm run dev",
-    "clean": "rimraf dist build release",
+    "clean": "rimraf dist release",
     "build:frontend": "vite build",
     "prebuild": "npm run clean && npm run build:frontend",
     "build:win": "npm run prebuild && electron-builder --win --x64",
@@ -20,14 +22,16 @@
     "appId": "com.fluxcore.nexus",
     "productName": "Flux Core Nexus",
     "asar": true,
+    "asarUnpack": [
+      "**/*.node"
+    ],
     "directories": {
-      "output": "dist"
+      "output": "release"
     },
     "files": [
-      "build/**/*",
+      "dist/**/*",
       "electron-main.js",
-      "package.json",
-      "native/**/*"
+      "package.json"
     ],
     "win": {
       "target": "nsis",
@@ -63,6 +67,7 @@
     "@types/react-dom": "^18.2.0",
     "tailwindcss": "^3.4.1",
     "autoprefixer": "^10.4.17",
-    "postcss": "^8.4.35"
+    "postcss": "^8.4.35",
+    "7zip-bin": "^5.2.0"
   }
 }

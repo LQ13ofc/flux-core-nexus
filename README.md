@@ -1,57 +1,63 @@
+
 # 🚀 Flux Core Nexus v4.1 - God Mode Edition
 
 ![Flux Core Banner](https://img.shields.io/badge/Flux_Core-v4.1_God_Mode-blue?style=for-the-badge) ![Status](https://img.shields.io/badge/Status-UNDETECTED-green?style=for-the-badge) ![Platform](https://img.shields.io/badge/Platform-Windows_%7C_Linux_%7C_macOS-lightgrey?style=for-the-badge)
 
-**Flux Core Nexus** é um ambiente de execução de scripts de última geração ("Executor") projetado para engenharia reversa, testes de penetração em jogos e modificação de comportamento em tempo real.
+**Flux Core Nexus** is a next-generation script execution environment designed for reverse engineering, game penetration testing, and real-time behavior modification.
 
 ---
 
-## ⚡ Guia de Instalação Rápida
+## ⚡ Quick Start Guide
 
-Siga estes passos exatos para compilar o projeto sem erros.
+### 1. Pre-requisites
+- **Node.js** (LTS version recommended)
+- **Visual C++ Build Tools** (Windows only) for compiling native dependencies like `koffi`.
 
-### 1. Preparar Ambiente
-Se certifique de fechar qualquer instância aberta do Flux Core antes de começar. Se deu erro **EBUSY**, verifique o Gerenciador de Tarefas e feche processos `electron.exe` travados.
-
-### 2. Instalar
-Execute no terminal na pasta do projeto:
+### 2. Installation
+Run the following command in the project root to install dependencies and rebuild native modules for Electron:
 
 ```bash
 npm install
 ```
 
-### 3. Gerar Executável (Build)
-Este comando detecta seu sistema, limpa builds anteriores e cria o instalador novo:
+### 3. Build Application
+This command cleans previous builds and generates the installer for your current OS:
 
 ```bash
 npm run build:auto
 ```
 
-O executável final (Setup) aparecerá na pasta `dist/`.
-*   **Windows:** `Flux Core Nexus Setup 4.1.0.exe`
-*   **Linux:** `Flux Core Nexus-4.1.0.AppImage`
+The output files (Installer/Executable) will be located in the `release/` directory.
 
 ---
 
-## 🔧 Solução de Problemas Comuns
+## 🔧 Troubleshooting
 
-### 🔴 Erro: `EBUSY: resource busy or locked`
-**Causa:** Você tentou fazer o build enquanto o programa estava aberto ou um processo "zumbi" ficou travado no fundo.
-**Solução:**
-1.  Feche o Flux Core se estiver aberto.
-2.  Abra o **Gerenciador de Tarefas** (Ctrl+Shift+Esc).
-3.  Procure por processos `electron.exe` ou `Flux Core Nexus` e finalize-os.
-4.  Tente rodar `npm run build:auto` novamente.
+### 🔴 Native Bindings Error / Koffi Failed to Load
+**Cause:** The `koffi` library was compiled for Node.js but is running inside Electron (which uses a different V8 version).
+**Solution:**
+Run the rebuild command manually:
+```bash
+npm run postinstall
+```
+Or force a rebuild:
+```bash
+npx electron-builder install-app-deps
+```
 
-### 🔴 Erro: `Binary not found on disk` ao rodar `npm start`
-**Status:** Normal.
-Isso apenas avisa que você não compilou a DLL C++ (`FluxCore_x64.dll`). O aplicativo funcionará em **Modo Remote Bridge** (interface completa, mas injeção simulada). Para uso real em jogos, você precisa compilar o código C++ na pasta `/native`.
+### 🔴 EBUSY: Resource busy or locked
+**Cause:** A previous instance of the app or the builder is still running in the background.
+**Solution:**
+1. Close Flux Core.
+2. Open Task Manager / System Monitor.
+3. Kill any `electron`, `Flux Core Nexus`, or `node` processes.
+4. Try building again.
 
-### 🔴 Tela Branca / Crash
-Se a janela ficar preta ou invisível:
-1.  Isso pode ser incompatibilidade de GPU com a transparência.
-2.  Edite `electron-main.js` e mude `transparent: true` para `false` e `frame: false` para `true` temporariamente para testar.
+### 🔴 Visual Glitches (Black/White Screen)
+If the window is transparent or black:
+- Hardware acceleration is disabled by default in `electron-main.js` to prevent this.
+- If issues persist, ensure your GPU drivers are up to date.
 
 ---
 
-**Desenvolvido por Nexus Dev Team.**
+**Developed by Nexus Dev Team.**

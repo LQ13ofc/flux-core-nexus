@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Play, Trash2, FileCode, ChevronDown, Save } from 'lucide-react';
+import { Play, Trash2, FileCode } from 'lucide-react';
 import { PluginModule } from '../types';
 
 interface ScriptEditorProps {
@@ -11,11 +11,21 @@ interface ScriptEditorProps {
 const ScriptEditor: React.FC<ScriptEditorProps> = ({ addLog, enabledPlugins }) => {
   const [code, setCode] = useState<string>(`print("Hello from Flux Core!")`);
 
-  const handleExecute = () => {
+  const handleExecute = async () => {
     if ((window as any).require) {
       const { ipcRenderer } = (window as any).require('electron');
       addLog('Sending script payload to pipe...', 'INFO', 'EXEC');
-      ipcRenderer.send('execute-script', code);
+      
+      try {
+        const result = await ipcRenderer.invoke('execute-script', code);
+        if (result.success) {
+            addLog('Script execution acknowledged by kernel.', 'SUCCESS', 'EXEC');
+        } else {
+            addLog(`Execution Error: ${result.error}`, 'ERROR', 'EXEC');
+        }
+      } catch (e: any) {
+        addLog(`IPC Bridge Failure: ${e.message || e}`, 'ERROR', 'EXEC');
+      }
     } else {
       addLog('Execution unavailable in web browser mode.', 'ERROR', 'ENV');
     }

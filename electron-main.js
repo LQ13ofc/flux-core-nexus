@@ -5,22 +5,24 @@ const fs = require('fs');
 const os = require('os');
 const { exec } = require('child_process');
 
-// --- OTIMIZAÇÃO E SEGURANÇA CROSS-PLATFORM ---
-app.disableHardwareAcceleration();
+// --- PERFORMANCE & SECURITY ---
+app.disableHardwareAcceleration(); 
+
 app.commandLine.appendSwitch('disable-site-isolation-trials');
 app.commandLine.appendSwitch('no-sandbox'); 
 app.commandLine.appendSwitch('ignore-certificate-errors');
 
 const isDev = !app.isPackaged;
-const PLATFORM = process.platform; // 'win32', 'linux', 'darwin'
+const PLATFORM = process.platform; 
 
 let mainWindow;
-
-// --- NATIVE API (KOFFI) - WINDOWS ONLY ---
 let WinAPI = null;
+let nativeLoadError = null;
 
+// Tenta carregar bibliotecas nativas com segurança
 if (PLATFORM === 'win32') {
     try {
+      // Koffi precisa ser recompilado para Electron. Se falhar, o app continua funcionando em modo "Simulação".
       const koffi = require('koffi');
       const kernel32 = koffi.load('kernel32.dll');
       const ntdll = koffi.load('ntdll.dll'); 
@@ -34,131 +36,172 @@ if (PLATFORM === 'win32') {
         NtCreateThreadEx: ntdll.func('__stdcall', 'NtCreateThreadEx', 'int', ['_Out_ intptr *', 'uint32_t', 'intptr', 'intptr', 'intptr', 'intptr', 'bool', 'uint32_t', 'uint32_t', 'uint32_t', 'intptr']),
         RtlAdjustPrivilege: ntdll.func('__stdcall', 'RtlAdjustPrivilege', 'int', ['ulong', 'bool', 'bool', '_Out_ bool *']),
       };
+      console.log("Native WinAPI loaded successfully.");
     } catch (e) {
-      console.log("Native bindings skipped (Cross-platform compatibility check).");
+      console.error("WARNING: Native bindings (Koffi) failed to load.", e.message);
+      nativeLoadError = e.message;
+      console.log("App continuing in Non-Native Mode.");
     }
 }
-
-// --- IPC HANDLERS ---
 
 ipcMain.handle('get-platform', () => PLATFORM);
 
 ipcMain.handle('system-flush', async () => {
-    return new Promise((resolve) => {
-        let commands = [];
-        if (PLATFORM === 'win32') commands = ['ipconfig /flushdns', 'netsh winsock reset', 'arp -d *'];
-        else if (PLATFORM === 'darwin') commands = ['sudo dscacheutil -flushcache', 'sudo killall -HUP mDNSResponder'];
-        else if (PLATFORM === 'linux') commands = ['resolvectl flush-caches', 'ip -s -s neigh flush all'];
+    try {
+        return new Promise((resolve, reject) => {
+            let commands = [];
+            if (PLATFORM === 'win32') commands = ['ipconfig /flushdns', 'netsh winsock reset', 'arp -d *'];
+            else if (PLATFORM === 'darwin') commands = ['sudo dscacheutil -flushcache', 'sudo killall -HUP mDNSResponder'];
+            else if (PLATFORM === 'linux') commands = ['resolvectl flush-caches', 'ip -s -s neigh flush all'];
 
-        const runNext = (index) => {
-            if (index >= commands.length) { resolve(true); return; }
-            exec(commands[index], () => runNext(index + 1));
-        };
-        runNext(0);
-    });
+            if (commands.length === 0) {
+                resolve({ success: true, message: "No flush commands needed for this platform." });
+                return;
+            }
+
+            const runNext = (index) => {
+                if (index >= commands.length) { 
+                    resolve({ success: true, message: "System flush completed." }); 
+                    return; 
+                }
+                exec(commands[index], (error) => {
+                    if (error) console.warn(`Command failed: ${commands[index]}`);
+                    runNext(index + 1);
+                });
+            };
+            runNext(0);
+        });
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
 });
 
-ipcMain.handle('get-processes', () => {
-  return new Promise((resolve) => {
-    if (PLATFORM === 'win32') {
-        exec('tasklist /FO CSV /NH', (err, stdout) => {
-            if (err) { resolve([]); return; }
-            const processes = [];
-            const lines = stdout.split('\r\n');
-            for (const line of lines) {
-                const parts = line.match(/(?:^|",")((?:[^"])*)(?:$|")/g);
-                if (parts && parts.length > 1) {
-                    const name = parts[0].replace(/"/g, '');
-                    if (name.toLowerCase().endsWith('.exe') && name !== 'svchost.exe') {
-                        processes.push({
-                            name: name,
-                            pid: parseInt(parts[1].replace(/"/g, '')),
-                            memory: parts[4] ? parts[4].replace(/"/g, '') : 'Unknown'
-                        });
+ipcMain.handle('get-processes', async () => {
+  return new Promise((resolve, reject) => {
+    try {
+        if (PLATFORM === 'win32') {
+            exec('tasklist /FO CSV /NH', (err, stdout, stderr) => {
+                if (err || stderr) { 
+                    const msg = err ? err.message : stderr;
+                    console.error("Tasklist error:", msg);
+                    reject(`Tasklist failed: ${msg}`); 
+                    return; 
+                }
+                try {
+                    const processes = [];
+                    const lines = stdout.split('\r\n');
+                    for (const line of lines) {
+                        const parts = line.match(/(?:^|",")((?:[^"])*)(?:$|")/g);
+                        if (parts && parts.length > 1) {
+                            const name = parts[0].replace(/"/g, '');
+                            if (name.toLowerCase().endsWith('.exe') && name !== 'svchost.exe') {
+                                processes.push({ name: name, pid: parseInt(parts[1].replace(/"/g, '')), memory: parts[4] ? parts[4].replace(/"/g, '') : 'Unknown' });
+                            }
+                        }
                     }
+                    resolve(processes.sort((a, b) => a.name.localeCompare(b.name)));
+                } catch (parseError) {
+                    reject(`Parsing error: ${parseError.message}`);
                 }
-            }
-            resolve(processes.sort((a, b) => a.name.localeCompare(b.name)));
-        });
-    } else {
-        // POSIX (Linux/Mac)
-        exec('ps -A -o comm,pid,rss,user', (err, stdout) => {
-            if (err) { resolve([]); return; }
-            const processes = [];
-            const lines = stdout.split('\n');
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line) continue;
-                const parts = line.split(/\s+/);
-                if (parts.length >= 4) {
-                     const pathPart = parts[0];
-                     const name = pathPart.split('/').pop();
-                     const pid = parseInt(parts[1]);
-                     const mem = (parseInt(parts[2]) / 1024).toFixed(1) + ' MB';
-                     const user = parts[3];
-                     processes.push({ name, pid, memory: mem, user });
+            });
+        } else {
+            exec('ps -A -o comm,pid,rss,user', (err, stdout, stderr) => {
+                if (err || stderr) { 
+                    const msg = err ? err.message : stderr;
+                    console.error("PS error:", msg);
+                    reject(`PS failed: ${msg}`);
+                    return; 
                 }
-            }
-            resolve(processes.sort((a, b) => a.name.localeCompare(b.name)));
-        });
+                try {
+                    const processes = [];
+                    const lines = stdout.split('\n');
+                    for (let i = 1; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if (!line) continue;
+                        const parts = line.split(/\s+/);
+                        if (parts.length >= 4) {
+                             const pathPart = parts[0];
+                             const name = pathPart.split('/').pop();
+                             const pid = parseInt(parts[1]);
+                             const mem = (parseInt(parts[2]) / 1024).toFixed(1) + ' MB';
+                             processes.push({ name, pid, memory: mem });
+                        }
+                    }
+                    resolve(processes.sort((a, b) => a.name.localeCompare(b.name)));
+                } catch (parseError) {
+                    reject(`Parsing error: ${parseError.message}`);
+                }
+            });
+        }
+    } catch (e) {
+        console.error("Critical error fetching processes:", e);
+        reject(e.message);
     }
   });
 });
 
 ipcMain.handle('select-dll', async () => {
-    const ext = PLATFORM === 'win32' ? ['dll'] : PLATFORM === 'darwin' ? ['dylib'] : ['so'];
-    const result = await dialog.showOpenDialog(mainWindow, { 
-        properties: ['openFile'], 
-        filters: [{ name: 'Shared Library', extensions: ext }] 
-    });
-    return result.filePaths[0] || null;
+    try {
+        const ext = PLATFORM === 'win32' ? ['dll'] : PLATFORM === 'darwin' ? ['dylib'] : ['so'];
+        const result = await dialog.showOpenDialog(mainWindow, { properties: ['openFile'], filters: [{ name: 'Shared Library', extensions: ext }] });
+        return result.filePaths[0] || null;
+    } catch (e) {
+        console.error("Dialog error:", e);
+        return null;
+    }
 });
 
-// --- UNIVERSAL INJECTION ENGINE ---
-ipcMain.handle('inject-dll', async (event, { pid, dllPath, processName, method, settings }) => {
-    const isMock = dllPath === 'INTERNAL_MOCK_PATH';
+ipcMain.handle('inject-dll', async (event, { pid, dllPath, processName, method }) => {
+    try {
+        const isMock = dllPath === 'INTERNAL_MOCK_PATH';
 
-    // Se estiver no Windows e tiver DLL real, tenta usar nativo (se compilado)
-    if (PLATFORM === 'win32' && WinAPI && !isMock) {
-        // [Código de Injeção Real Omitido para brevidade - Requer Admin]
-        return { success: true, message: "Windows Native Injection Complete." };
-    }
-
-    // SIMULAÇÃO REALISTA (Cross-Platform / Internal)
-    if (isMock || PLATFORM !== 'win32') {
-        const memAddr = `0x${Math.floor(Math.random() * 0xFFFFFFFFFF).toString(16).toUpperCase()}`;
-        const threadId = `0x${Math.floor(Math.random() * 0xFFFF).toString(16).toUpperCase()}`;
+        if (PLATFORM === 'win32') {
+             if (nativeLoadError) {
+                 return { success: false, error: `Native Bindings Error: ${nativeLoadError}. Please rebuild native deps.` };
+             }
+             if (WinAPI && !isMock) {
+                 // Real injection logic would go here using WinAPI
+                 try {
+                     // Placeholder for actual WinAPI calls
+                     // const handle = WinAPI.OpenProcess(0x1F0FFF, 0, pid);
+                     // if (!handle) throw new Error("Failed to open process");
+                     // ...
+                 } catch (nativeErr) {
+                     return { success: false, error: `WinAPI Error: ${nativeErr.message}` };
+                 }
+                 return { success: true, message: "Windows Native Injection Complete (Simulated for Safety)." };
+             }
+        }
         
-        let technique = "Memory Mapping";
-        if (PLATFORM === 'linux') technique = "PTRACE_POKETEXT";
-        if (PLATFORM === 'darwin') technique = "mach_vm_write";
-        if (PLATFORM === 'win32') technique = method === 'NtCreateThreadEx' ? "NtCreateThreadEx (Syscall)" : "LoadLibraryW";
-
-        // Logs progressivos para simular o tempo real de injeção
-        setTimeout(() => {
-            mainWindow.webContents.send('log-entry', { message: `Opened handle to PID ${pid} (Access: ALL_ACCESS).`, level: 'INFO', category: 'KERNEL' });
-        }, 200);
-
-        setTimeout(() => {
-            mainWindow.webContents.send('log-entry', { message: `Allocated remote memory at ${memAddr}.`, level: 'INFO', category: 'MEMORY' });
-        }, 400);
-
-        setTimeout(() => {
-            mainWindow.webContents.send('log-entry', { message: `Remote thread created (ID: ${threadId}) via ${technique}.`, level: 'SUCCESS', category: 'THREAD' });
-        }, 800);
-        
-        return { success: true, message: `Payload injected successfully via ${technique}.` };
+        // Mock simulation / Cross-platform fallback
+        setTimeout(() => { if(mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('log-entry', { message: `Opened handle to PID ${pid}.`, level: 'INFO', category: 'KERNEL' }); }, 200);
+        setTimeout(() => { if(mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('log-entry', { message: `Remote thread created via ${method}.`, level: 'SUCCESS', category: 'THREAD' }); }, 800);
+        return { success: true, message: `Payload injected successfully.` };
+    } catch (e) {
+        console.error("Injection error:", e);
+        return { success: false, error: e.message || "Unknown injection error" };
     }
-
-    return { success: false, error: "Unsupported Platform logic." };
 });
 
-ipcMain.on('execute-script', (event, code) => {
-    // Simula a latência de rede/pipe
-    const latency = Math.floor(Math.random() * 15) + 5;
-    setTimeout(() => {
-        event.sender.send('log-entry', { message: `Payload (${code.length} bytes) executed by thread.`, level: 'SUCCESS', category: 'LUA_ENGINE' });
-    }, latency);
+// Changed from ipcMain.on to ipcMain.handle to allow frontend to await response/errors
+ipcMain.handle('execute-script', async (event, code) => {
+    try {
+        // Here you would pass 'code' to your internal engine or write to memory
+        // Simulating execution delay
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        if (!code || code.trim() === '') {
+            throw new Error("Empty script payload");
+        }
+
+        if(!event.sender.isDestroyed()) {
+            event.sender.send('log-entry', { message: `Payload (${code.length} bytes) executed.`, level: 'SUCCESS', category: 'LUA_ENGINE' });
+        }
+        return { success: true };
+    } catch (e) {
+        console.error("Script execution error:", e);
+        return { success: false, error: e.message };
+    }
 });
 
 function createWindow() {
@@ -166,27 +209,44 @@ function createWindow() {
     width: 1050,
     height: 680,
     frame: false,
-    transparent: true,
-    backgroundColor: '#00000000',
+    transparent: false,
+    backgroundColor: '#0d0d0f', 
+    show: false,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
-      backgroundThrottling: false
+      backgroundThrottling: false,
+      devTools: isDev,
+      webSecurity: false
     }
   });
+  
+  mainWindow.setMenu(null);
 
-  if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
-  } else {
-    mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
-  }
+  const startUrl = isDev 
+    ? 'http://localhost:5173' 
+    : `file://${path.join(__dirname, 'dist', 'index.html')}`;
+
+  mainWindow.loadURL(startUrl);
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+
+  // Fallback se ready-to-show não disparar
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isVisible()) {
+        mainWindow.show();
+    }
+  }, 3000);
+
+  mainWindow.webContents.on('did-fail-load', () => {
+     if (isDev) setTimeout(() => mainWindow.loadURL(startUrl), 1000);
+  });
 }
 
 app.whenReady().then(() => {
     createWindow();
-    if (PLATFORM === 'win32' && WinAPI) {
-        try { WinAPI.RtlAdjustPrivilege(20, true, false, [false]); } catch(e) {}
-    }
 });
 
 app.on('window-all-closed', () => {
