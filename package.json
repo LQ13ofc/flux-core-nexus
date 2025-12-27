@@ -1,19 +1,19 @@
 {
   "name": "flux-core-master",
-  "version": "4.2.0",
+  "version": "4.3.0",
   "description": "Flux Core Nexus: Advanced Execution Environment",
   "main": "electron-main.js",
   "author": "Nexus Dev Team",
   "license": "MIT",
   "scripts": {
-    "start": "electron .",
-    "clean": "rimraf dist release",
-    "clean:all": "rimraf dist release node_modules",
-    "reinstall": "npm run clean:all && npm install",
-    "prebuild": "npm run clean",
-    "build:win": "npm run clean && electron-builder --win --x64",
-    "build:linux": "npm run clean && electron-builder --linux --x64",
-    "build:mac": "npm run clean && electron-builder --mac --arm64",
+    "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "start": "npm run dev",
+    "clean": "rimraf dist build release",
+    "build:frontend": "vite build",
+    "prebuild": "npm run clean && npm run build:frontend",
+    "build:win": "npm run prebuild && electron-builder --win --x64",
+    "build:linux": "npm run prebuild && electron-builder --linux --x64",
+    "build:mac": "npm run prebuild && electron-builder --mac --arm64",
     "build:auto": "node -e \"const os=require('os'); const p=os.platform(); const cmd = p==='win32' ? 'npm run build:win' : p==='darwin' ? 'npm run build:mac' : 'npm run build:linux'; console.log('\\x1b[36m%s\\x1b[0m', 'Flux Core Build System: Detected ' + p.toUpperCase()); require('child_process').execSync(cmd, {stdio:'inherit'});\""
   },
   "build": {
@@ -23,8 +23,15 @@
     "directories": {
       "output": "dist"
     },
+    "files": [
+      "build/**/*",
+      "electron-main.js",
+      "package.json",
+      "native/**/*"
+    ],
     "win": {
       "target": "nsis",
+      "icon": "assets/icon.ico",
       "requestedExecutionLevel": "requireAdministrator"
     },
     "linux": {
@@ -37,11 +44,22 @@
   },
   "dependencies": {
     "electron-updater": "^6.3.9",
-    "koffi": "^2.9.0"
+    "koffi": "^2.9.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "lucide-react": "^0.300.0",
+    "@google/genai": "^0.1.0"
   },
   "devDependencies": {
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
-    "rimraf": "^6.0.1"
+    "rimraf": "^6.0.1",
+    "vite": "^5.0.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "concurrently": "^8.2.0",
+    "wait-on": "^7.2.0",
+    "typescript": "^5.3.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0"
   }
 }
