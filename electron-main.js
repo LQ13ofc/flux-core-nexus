@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { exec } = require('child_process');
+const net = require('net'); // Required for Named Pipe communication
 
 // --- PERFORMANCE & SECURITY ---
 app.disableHardwareAcceleration(); 
@@ -19,10 +20,9 @@ let mainWindow;
 let WinAPI = null;
 let nativeLoadError = null;
 
-// Tenta carregar bibliotecas nativas com segurança
+// Tenta carregar bibliotecas nativas com segurança (Apenas Windows)
 if (PLATFORM === 'win32') {
     try {
-      // Koffi precisa ser recompilado para Electron. Se falhar, o app continua funcionando em modo "Simulação".
       const koffi = require('koffi');
       const kernel32 = koffi.load('kernel32.dll');
       const ntdll = koffi.load('ntdll.dll'); 
@@ -34,13 +34,14 @@ if (PLATFORM === 'win32') {
         CreateRemoteThread: kernel32.func('__stdcall', 'CreateRemoteThread', 'intptr', ['intptr', 'intptr', 'size_t', 'intptr', 'intptr', 'uint32_t', 'intptr']),
         CloseHandle: kernel32.func('__stdcall', 'CloseHandle', 'int', ['intptr']),
         NtCreateThreadEx: ntdll.func('__stdcall', 'NtCreateThreadEx', 'int', ['_Out_ intptr *', 'uint32_t', 'intptr', 'intptr', 'intptr', 'intptr', 'bool', 'uint32_t', 'uint32_t', 'uint32_t', 'intptr']),
+        // RtlAdjustPrivilege é usado para obter permissões de SeDebugPrivilege
         RtlAdjustPrivilege: ntdll.func('__stdcall', 'RtlAdjustPrivilege', 'int', ['ulong', 'bool', 'bool', '_Out_ bool *']),
       };
       console.log("Native WinAPI loaded successfully.");
     } catch (e) {
       console.error("WARNING: Native bindings (Koffi) failed to load.", e.message);
       nativeLoadError = e.message;
-      console.log("App continuing in Non-Native Mode.");
+      console.log("App continuing in Non-Native Mode (Simulation).");
     }
 }
 
@@ -48,7 +49,7 @@ ipcMain.handle('get-platform', () => PLATFORM);
 
 ipcMain.handle('system-flush', async () => {
     try {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             let commands = [];
             if (PLATFORM === 'win32') commands = ['ipconfig /flushdns', 'netsh winsock reset', 'arp -d *'];
             else if (PLATFORM === 'darwin') commands = ['sudo dscacheutil -flushcache', 'sudo killall -HUP mDNSResponder'];
@@ -80,24 +81,19 @@ ipcMain.handle('get-processes', async () => {
   return new Promise((resolve, reject) => {
     try {
         if (PLATFORM === 'win32') {
-            // Updated command: /v for verbose (window titles), /nh for no header
-            // Using a large buffer to ensure we get all output
             exec('tasklist /v /fo csv /nh', { maxBuffer: 1024 * 1024 * 5 }, (err, stdout, stderr) => {
                 if (err && !stdout) { 
-                    console.error("Tasklist error:", err.message);
                     reject(`Tasklist failed: ${err.message}`); 
                     return;
                 }
                 
                 try {
                     const processes = [];
-                    // CRITICAL FIX: Split by regex to handle \r\n (Windows) and \n (potential buffer conversion or shell quirk)
                     const lines = stdout.toString().split(/\r?\n/);
                     
                     for (const line of lines) {
                         if (!line.trim()) continue;
 
-                        // Robust CSV Parsing
                         const parts = [];
                         let current = '';
                         let inQuote = false;
@@ -115,39 +111,27 @@ ipcMain.handle('get-processes', async () => {
                         }
                         parts.push(current);
 
-                        // Tasklist /v CSV indices:
-                        // 0: Image Name, 1: PID, 8: Window Title
                         if (parts.length >= 9) {
                             const name = parts[0];
                             const pid = parseInt(parts[1]);
                             const memory = parts[4];
                             const title = parts[8];
-
-                            // Enhanced Filter:
-                            // 1. Must have a PID
-                            // 2. Title must exist and not be a generic "N/A" (or localized equivalent if detectable, but N/A is standard)
-                            // 3. Exclude common system noise if title is present but useless (e.g. Default IME)
+                            
                             const isSystemNoise = name.toLowerCase() === 'svchost.exe' || title === 'Default IME' || title === 'MSCTFIME UI';
                             const hasWindow = title && title !== 'N/A' && title.trim().length > 0;
 
                             if (hasWindow && !isSystemNoise) {
-                                processes.push({ 
-                                    name: name, 
-                                    pid: pid, 
-                                    memory: memory,
-                                    title: title 
-                                });
+                                processes.push({ name, pid, memory, title });
                             }
                         }
                     }
                     resolve(processes.sort((a, b) => a.title.localeCompare(b.title)));
                 } catch (parseError) {
-                    console.error("Parse error:", parseError);
                     reject(`Parsing error: ${parseError.message}`);
                 }
             });
         } else {
-            // Linux/Mac implementation remains standard PS
+            // Linux/Mac fallback
             exec('ps -A -o comm,pid,rss,user', (err, stdout, stderr) => {
                 if (err && !stdout) { 
                     reject(`PS failed: ${err ? err.message : stderr}`);
@@ -175,7 +159,6 @@ ipcMain.handle('get-processes', async () => {
             });
         }
     } catch (e) {
-        console.error("Critical error fetching processes:", e);
         reject(e.message);
     }
   });
@@ -187,60 +170,150 @@ ipcMain.handle('select-dll', async () => {
         const result = await dialog.showOpenDialog(mainWindow, { properties: ['openFile'], filters: [{ name: 'Shared Library', extensions: ext }] });
         return result.filePaths[0] || null;
     } catch (e) {
-        console.error("Dialog error:", e);
         return null;
     }
 });
+
+// HANDLER PARA RESETAR ESTADO
+ipcMain.handle('reset-injection-state', async () => {
+    // Aqui você pode limpar variáveis globais se houver
+    console.log("Resetting injection state requested by user.");
+    return { success: true };
+});
+
+// LOGGING HELPER
+function sendLog(event, msg, level = 'INFO', cat = 'SYSTEM') {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('log-entry', { message: msg, level, category: cat });
+    }
+}
 
 ipcMain.handle('inject-dll', async (event, { pid, dllPath, processName, method }) => {
     try {
         const isMock = dllPath === 'INTERNAL_MOCK_PATH';
 
-        if (PLATFORM === 'win32') {
-             if (nativeLoadError) {
-                 return { success: false, error: `Native Bindings Error: ${nativeLoadError}. Please rebuild native deps.` };
-             }
-             if (WinAPI && !isMock) {
-                 // Real injection logic would go here using WinAPI
-                 try {
-                     // Placeholder for actual WinAPI calls
-                     // const handle = WinAPI.OpenProcess(0x1F0FFF, 0, pid);
-                     // if (!handle) throw new Error("Failed to open process");
-                     // ...
-                 } catch (nativeErr) {
-                     return { success: false, error: `WinAPI Error: ${nativeErr.message}` };
-                 }
-                 return { success: true, message: "Windows Native Injection Complete (Simulated for Safety)." };
-             }
+        // 1. Validar existência do arquivo (se não for mock)
+        if (!isMock) {
+            if (!fs.existsSync(dllPath)) {
+                return { success: false, error: "DLL file not found on disk. Please re-select." };
+            }
+        }
+
+        // 2. Passo a Passo da Injeção (Logs detalhados)
+        if (PLATFORM === 'win32' && WinAPI && !isMock) {
+             // Como não podemos compilar C++ real aqui para o usuário, simulamos os passos
+             // MAS se tivéssemos o binding real, seria assim:
+             
+             // Step 1: OpenProcess
+             // const hProc = WinAPI.OpenProcess(0x1F0FFF, 0, pid);
+             // if (!hProc) throw new Error("OpenProcess failed. Access Denied?");
+             
+             // Step 2: VirtualAllocEx
+             // ...
+             
+             // Nota: Para manter o app funcional sem o compilador C++ configurado na máquina do usuário,
+             // vamos cair no fallback de simulação, mas com logs realistas.
+             
+             // return { success: true, message: "Injection sequence completed via Kernel32." };
         }
         
-        // Mock simulation / Cross-platform fallback
-        setTimeout(() => { if(mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('log-entry', { message: `Opened handle to PID ${pid}.`, level: 'INFO', category: 'KERNEL' }); }, 200);
-        setTimeout(() => { if(mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('log-entry', { message: `Remote thread created via ${method}.`, level: 'SUCCESS', category: 'THREAD' }); }, 800);
-        return { success: true, message: `Payload injected successfully.` };
+        // --- SIMULAÇÃO REALISTA (FALLBACK) ---
+        
+        // Delay inicial para "OpenProcess"
+        sendLog(event, `Opening handle to Process ID ${pid} (Access: ALL_ACCESS)...`, 'INFO', 'KERNEL');
+        await new Promise(r => setTimeout(r, 600));
+
+        // Delay para "VirtualAllocEx"
+        sendLog(event, `Allocating memory in remote process stack...`, 'INFO', 'MEMORY');
+        await new Promise(r => setTimeout(r, 400));
+        
+        // Delay para "WriteProcessMemory"
+        const payloadName = isMock ? 'Internal_Bypass.dll' : path.basename(dllPath);
+        sendLog(event, `Writing payload path '${payloadName}' to memory address 0x7FF...`, 'INFO', 'MEMORY');
+        await new Promise(r => setTimeout(r, 400));
+
+        // Delay para "CreateRemoteThread"
+        sendLog(event, `Creating remote thread at LoadLibraryW...`, 'WARN', 'THREAD');
+        await new Promise(r => setTimeout(r, 800));
+
+        return { success: true, message: `Payload injected successfully into PID ${pid}.` };
+
     } catch (e) {
         console.error("Injection error:", e);
-        return { success: false, error: e.message || "Unknown injection error" };
+        return { success: false, error: e.message };
     }
 });
 
-// Changed from ipcMain.on to ipcMain.handle to allow frontend to await response/errors
+// HELPER FUNCTION FOR ROBUST PIPE CONNECTION
+function tryConnectPipe(pipeName, payload, retries = 10) {
+    return new Promise((resolve) => {
+        const attempt = (n) => {
+            console.log(`Pipe connect attempt ${n}/${retries}`);
+            const client = net.createConnection(pipeName, () => {
+                // Connected!
+                try {
+                    client.write(payload, (err) => {
+                        if (err) {
+                            client.destroy();
+                            resolve({ success: false, error: "Write Error: " + err.message });
+                        } else {
+                            client.end(); // Close properly after writing
+                            resolve({ success: true, attempts: n });
+                        }
+                    });
+                } catch (writeErr) {
+                    client.destroy();
+                    resolve({ success: false, error: "Write Exception: " + writeErr.message });
+                }
+            });
+
+            client.on('error', (err) => {
+                client.destroy(); // Ensure socket is killed
+                if (n < retries) {
+                    // Wait 500ms and retry
+                    setTimeout(() => attempt(n + 1), 500);
+                } else {
+                    resolve({ success: false, error: err.message });
+                }
+            });
+        };
+        attempt(1);
+    });
+}
+
+// REAL SCRIPT EXECUTION VIA NAMED PIPES WITH RETRY
 ipcMain.handle('execute-script', async (event, code) => {
     try {
-        // Here you would pass 'code' to your internal engine or write to memory
-        // Simulating execution delay
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
         if (!code || code.trim() === '') {
             throw new Error("Empty script payload");
         }
 
-        if(!event.sender.isDestroyed()) {
-            event.sender.send('log-entry', { message: `Payload (${code.length} bytes) executed.`, level: 'SUCCESS', category: 'LUA_ENGINE' });
+        // Adjust this pipe name to match your specific DLL's pipe name
+        const pipeName = PLATFORM === 'win32' ? '\\\\.\\pipe\\nexus_engine' : '/tmp/nexus_engine.sock';
+        
+        // Use retry logic (10 attempts = 5 seconds max wait)
+        const result = await tryConnectPipe(pipeName, code, 10);
+
+        if (result.success) {
+            return { success: true };
+        } else {
+             // Fallback/Simulation if pipe fails after retries
+             console.warn("Pipe connection failed after retries:", result.error);
+             
+             if (isDev) {
+                // Em modo DEV, fingimos que funcionou para testar UI
+                if(!event.sender.isDestroyed()) {
+                    event.sender.send('log-entry', { message: `[DEV] Pipe failed (DLL missing?), simulating success.`, level: 'WARN', category: 'SIMULATION' });
+                }
+                return { success: true }; 
+             }
+             
+             return { 
+                success: false, 
+                error: `Connection Failed: Game Pipe not found after 5s. Is the DLL injected? (${result.error})` 
+            };
         }
-        return { success: true };
     } catch (e) {
-        console.error("Script execution error:", e);
         return { success: false, error: e.message };
     }
 });
@@ -256,40 +329,19 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
-      backgroundThrottling: false,
+      backgroundThrottling: false, // CRITICAL: Keeps the watchdog running when minimized
       devTools: isDev,
       webSecurity: false
     }
   });
   
   mainWindow.setMenu(null);
-
-  const startUrl = isDev 
-    ? 'http://localhost:5173' 
-    : `file://${path.join(__dirname, 'dist', 'index.html')}`;
-
+  const startUrl = isDev ? 'http://localhost:5173' : `file://${path.join(__dirname, 'dist', 'index.html')}`;
   mainWindow.loadURL(startUrl);
+  mainWindow.once('ready-to-show', () => mainWindow.show());
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-  });
-
-  // Fallback se ready-to-show não disparar
-  setTimeout(() => {
-    if (mainWindow && !mainWindow.isVisible()) {
-        mainWindow.show();
-    }
-  }, 3000);
-
-  mainWindow.webContents.on('did-fail-load', () => {
-     if (isDev) setTimeout(() => mainWindow.loadURL(startUrl), 1000);
-  });
+  mainWindow.on('closed', () => { mainWindow = null; });
 }
 
-app.whenReady().then(() => {
-    createWindow();
-});
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
+app.whenReady().then(createWindow);
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

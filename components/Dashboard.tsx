@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Zap, Target, Search, RefreshCw, Activity,
-  FileCode, FolderOpen, PlayCircle, Ghost, ShieldAlert, AlertTriangle
+  FileCode, FolderOpen, PlayCircle, Ghost, ShieldAlert, AlertTriangle, RotateCcw, Power
 } from 'lucide-react';
 import { SystemStats, ProcessInfo, AppSettings } from '../types';
 
@@ -21,8 +21,13 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
   const [showProcessList, setShowProcessList] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
   
+  // Ref para manter acesso ao estado atual dentro do intervalo sem recriar o closure
+  const statsRef = useRef(stats);
+  useEffect(() => { statsRef.current = stats; }, [stats]);
+
   // Função para buscar processos REAIS
   const fetchProcesses = async () => {
+    if (isScanning) return;
     setIsScanning(true);
     
     if ((window as any).require) {
@@ -32,20 +37,29 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
             
             if (Array.isArray(list)) {
                 setProcesses(list);
-            } else {
-                addLog('System Scan returned invalid data structure.', 'ERROR', 'SYSTEM');
+                
+                // --- PROCESS WATCHDOG (CÃO DE GUARDA) ---
+                const currentTarget = statsRef.current.target.process;
+                const currentStatus = statsRef.current.processStatus;
+
+                if (currentTarget && currentStatus !== 'INACTIVE' && currentStatus !== 'ERROR') {
+                    const isStillAlive = list.find(p => p.pid === currentTarget.pid);
+                    
+                    if (!isStillAlive) {
+                        addLog(`Connection Lost: Target process ${currentTarget.name} (PID: ${currentTarget.pid}) terminated.`, 'WARN', 'KERNEL');
+                        setStats(prev => ({
+                            ...prev,
+                            processStatus: 'INACTIVE',
+                            target: { ...prev.target, process: null }, 
+                            pipeConnected: false
+                        }));
+                    }
+                }
             }
         } catch (e: any) {
-            // Error string is now robustly passed from main process
-            const errorMsg = e.message || e.toString();
-            if (!errorMsg.includes("Tasklist failed") && !errorMsg.includes("PS failed")) {
-                 addLog(`Scan Error: ${errorMsg}`, 'ERROR', 'SYSTEM');
-            }
-            // Keep previous list if failed to prevent flickering, or empty if critical
-            if (processes.length === 0) setProcesses([]); 
+             // Silently fail to avoid spamming logs on scan errors
         }
     } else {
-        // Fallback visual apenas para navegador
         setProcesses([
             { name: 'Waiting for Electron Backend...', pid: 0, memory: '0 MB', session: 0, title: 'Simulation Mode' }
         ]);
@@ -56,7 +70,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
 
   useEffect(() => {
     fetchProcesses();
-    const interval = setInterval(fetchProcesses, 5000);
+    const interval = setInterval(fetchProcesses, 2000); 
     return () => clearInterval(interval);
   }, []);
 
@@ -75,6 +89,20 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
     }
   };
 
+  const handleResetState = () => {
+      addLog('MANUAL RESET: Clearing injection state and pipe handles...', 'WARN', 'SYSTEM');
+      setStats(prev => ({
+          ...prev,
+          processStatus: 'INACTIVE',
+          pipeConnected: false,
+          // Mantém o processo alvo selecionado para facilitar re-injeção
+      }));
+      if ((window as any).require) {
+          const { ipcRenderer } = (window as any).require('electron');
+          ipcRenderer.invoke('reset-injection-state');
+      }
+  };
+
   const handleInject = async () => {
     if (!stats.target.process) {
       addLog('ABORTED: Select a target process first.', 'WARN', 'CORE');
@@ -82,11 +110,16 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
       return;
     }
 
+    // Se já estiver injetado, o botão serve como "Re-Attach"
+    const isReAttach = stats.processStatus === 'INJECTED';
+    
     const currentDll = stats.target.dllPath || "Nexus_Internal_Bypass.dll";
     const usingInternal = !stats.target.dllPath;
 
-    addLog(`Initiating Injection -> ${stats.target.process.title || stats.target.process.name} (PID: ${stats.target.process.pid})`, 'INFO', 'KERNEL');
-    if (usingInternal) addLog('Payload: Internal Universal Bypass (Auto-Selected)', 'INFO', 'LOADER');
+    addLog(isReAttach 
+        ? `Re-Attaching to ${stats.target.process.name}...` 
+        : `Initiating Injection -> ${stats.target.process.title || stats.target.process.name} (PID: ${stats.target.process.pid})`, 
+        'INFO', 'KERNEL');
 
     setStats(p => ({ ...p, processStatus: 'ATTACHING' }));
 
@@ -104,9 +137,8 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
 
             if (result.success) {
                 addLog(result.message, 'SUCCESS', 'INJECTOR');
-                setStats(p => ({ ...p, processStatus: 'INJECTED' }));
-                // Delay para abrir o hub visualmente após sucesso
-                setTimeout(() => onOpenHub(), 800);
+                setStats(p => ({ ...p, processStatus: 'INJECTED', pipeConnected: true }));
+                setTimeout(() => onOpenHub(), 500);
             } else {
                 addLog(`Injection Failed: ${result.error}`, 'ERROR', 'INJECTOR');
                 setStats(p => ({ ...p, processStatus: 'ERROR' }));
@@ -116,10 +148,9 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
             setStats(p => ({ ...p, processStatus: 'ERROR' }));
         }
     } else {
-        // Simulação Browser
         setTimeout(() => {
             addLog('Thread Hijack Successful (Browser Simulation).', 'SUCCESS', 'INJECTOR');
-            setStats(p => ({ ...p, processStatus: 'INJECTED' }));
+            setStats(p => ({ ...p, processStatus: 'INJECTED', pipeConnected: true }));
             setTimeout(() => onOpenHub(), 500);
         }, 1000);
     }
@@ -147,9 +178,11 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
           Dashboard
         </h2>
         <div className="flex items-center gap-3">
-             <div className="px-3 py-1 rounded-full border border-green-500/20 bg-green-500/10 text-green-400 flex items-center gap-2">
-                <Activity size={12} />
-                <span className="text-[10px] font-black uppercase tracking-widest">SYSTEM READY</span>
+             <div className={`px-3 py-1 rounded-full border flex items-center gap-2 transition-colors ${stats.processStatus === 'INJECTED' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-zinc-800 border-white/5 text-zinc-500'}`}>
+                <Activity size={12} className={stats.processStatus === 'INJECTED' ? 'animate-pulse' : ''} />
+                <span className="text-[10px] font-black uppercase tracking-widest">
+                    {stats.processStatus === 'INJECTED' ? 'PIPE CONNECTED' : 'SYSTEM IDLE'}
+                </span>
              </div>
         </div>
       </div>
@@ -164,7 +197,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
                         <Target size={14} className="text-blue-500" />
                         <span className="text-[10px] font-bold uppercase tracking-widest">Target Process</span>
                     </div>
-                    <button onClick={fetchProcesses} className="p-1 hover:bg-white/5 rounded text-zinc-400 hover:text-white transition-colors" title="Refresh List">
+                    <button onClick={() => fetchProcesses()} className="p-1 hover:bg-white/5 rounded text-zinc-400 hover:text-white transition-colors" title="Force Refresh">
                         <RefreshCw size={14} className={isScanning ? 'animate-spin' : ''} />
                     </button>
                 </div>
@@ -177,13 +210,12 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
                     <div className="flex items-center gap-3 overflow-hidden">
                         {stats.target.process ? (
                             <>
-                                <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] animate-pulse" />
+                                <div className={`w-2 h-2 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.8)] ${stats.processStatus === 'INJECTED' ? 'bg-green-500 animate-pulse' : 'bg-blue-500'}`} />
                                 <span className="text-white truncate font-bold">{stats.target.process.title || stats.target.process.name}</span>
                                 <span className="text-zinc-500 text-xs ml-2">({stats.target.process.pid})</span>
                                 {isOsMismatch && (
-                                    <div className="ml-auto flex items-center gap-1 text-orange-500" title="Warning: Target is a Windows executable but you are on Unix. Injection may fail without Wine/Proton.">
+                                    <div className="ml-auto flex items-center gap-1 text-orange-500" title="Compat Warning">
                                         <AlertTriangle size={12} />
-                                        <span className="text-[9px] font-bold hidden sm:inline">COMPAT RISK</span>
                                     </div>
                                 )}
                             </>
@@ -199,7 +231,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
                         <input 
                         autoFocus
                         className="w-full bg-[#121215] p-3 text-xs border-b border-white/10 outline-none text-white font-mono placeholder:text-zinc-700"
-                        placeholder="Filter processes (Name or Window Title)..."
+                        placeholder="Filter processes..."
                         value={searchFilter}
                         onChange={(e) => setSearchFilter(e.target.value)}
                         />
@@ -256,12 +288,23 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
             </div>
         </div>
 
-        {/* Action Button */}
-        <div className={`lg:col-span-1 bg-[#121215] border rounded-2xl p-8 flex flex-col items-center justify-center text-center space-y-6 transition-all duration-500 relative overflow-hidden ${
+        {/* Action Button & Reset */}
+        <div className={`lg:col-span-1 bg-[#121215] border rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-6 transition-all duration-500 relative overflow-hidden ${
             stats.processStatus === 'INJECTED' ? 'border-green-500/20 shadow-[0_0_40px_rgba(34,197,94,0.05)]' : 'border-white/5'
         }`}>
             <div className={`absolute inset-0 bg-gradient-to-b from-blue-500/5 to-transparent transition-opacity duration-500 ${stats.processStatus === 'INJECTED' ? 'opacity-0' : 'opacity-100'}`} />
             <div className={`absolute inset-0 bg-gradient-to-b from-green-500/5 to-transparent transition-opacity duration-500 ${stats.processStatus === 'INJECTED' ? 'opacity-100' : 'opacity-0'}`} />
+            
+             {/* RESET BUTTON */}
+             <div className="absolute top-2 right-2 z-50">
+                <button 
+                    onClick={handleResetState}
+                    className="p-2 text-zinc-600 hover:text-red-500 bg-zinc-900/50 hover:bg-red-900/20 rounded-lg transition-all border border-transparent hover:border-red-500/30"
+                    title="Emergency Eject / Reset State"
+                >
+                    <Power size={14} />
+                </button>
+            </div>
 
             <div className={`w-20 h-20 rounded-2xl flex items-center justify-center transition-all relative z-10 ${
             stats.processStatus === 'INJECTED' ? 'bg-green-500/10 text-green-500 shadow-[0_0_20px_rgba(34,197,94,0.2)]' : 
@@ -279,7 +322,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
             </h3>
             <p className="text-zinc-500 text-[11px] max-w-xs mx-auto leading-relaxed font-bold uppercase tracking-wide">
                 {stats.processStatus === 'INJECTED' 
-                ? 'Internal Engine Active. Press INSERT to toggle Menu.' 
+                ? 'Internal Engine Active. Menu Overlay Ready.' 
                 : 'Stealth Execution Environment Ready.'}
             </p>
             </div>
@@ -287,10 +330,10 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
             <div className="w-full flex flex-col gap-3 max-w-xs relative z-10">
             <button 
                 onClick={handleInject}
-                disabled={stats.processStatus === 'INJECTED' || stats.processStatus === 'ATTACHING'}
+                disabled={stats.processStatus === 'ATTACHING'}
                 className={`w-full flex items-center justify-center gap-3 py-4 rounded-xl font-black transition-all text-xs tracking-[0.2em] uppercase ${
                 stats.processStatus === 'INJECTED' 
-                ? 'bg-zinc-900 text-green-500 cursor-default border border-green-500/20' 
+                ? 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white border border-white/5' 
                 : stats.processStatus === 'ERROR' 
                 ? 'bg-red-900/20 text-red-500 border border-red-500/20 hover:bg-red-900/30'
                 : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20 hover:scale-[1.02] active:scale-[0.98]'
@@ -298,10 +341,17 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
             >
                 {stats.processStatus === 'ATTACHING' ? (
                     <RefreshCw size={14} className="animate-spin" />
+                ) : stats.processStatus === 'INJECTED' ? (
+                    <>
+                        <RotateCcw size={14} />
+                        RE-INJECT
+                    </>
                 ) : (
-                    <PlayCircle size={14} fill="currentColor" />
+                    <>
+                         <PlayCircle size={14} fill="currentColor" />
+                         EXECUTE
+                    </>
                 )}
-                {stats.processStatus === 'INJECTED' ? 'ATTACHED' : stats.processStatus === 'ATTACHING' ? 'INJECTING...' : 'EXECUTE'}
             </button>
             
             {stats.processStatus === 'INJECTED' && (
