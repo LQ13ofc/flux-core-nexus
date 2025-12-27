@@ -41,8 +41,10 @@ class RobloxInjector {
 
     async getProcessList() {
         return new Promise((resolve) => {
-            // /v = verbose (gets window titles), /fo csv = CSV format, /NH = No Header
-            const cmd = process.platform === 'win32' ? 'tasklist /v /fo csv /NH' : 'ps -A -o comm,pid,rss';
+            // Execute tasklist to get verbose CSV output without headers
+            const cmd = process.platform === 'win32' 
+                ? 'tasklist /v /fo csv /NH' 
+                : 'ps -A -o comm,pid,rss';
             
             exec(cmd, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
                 const list = [];
@@ -50,49 +52,59 @@ class RobloxInjector {
                 if (!err && stdout) {
                     const lines = stdout.toString().split(/\r?\n/);
                     
+                    // Regex to parse standard tasklist CSV output:
+                    // "Image Name","PID","Session Name","Session#","Mem Usage","Status","User Name","CPU Time","Window Title"
+                    // Handles quoted values correctly.
+                    const csvRegex = /^"([^"]*)","([^"]*)","([^"]*)","([^"]*)","([^"]*)","([^"]*)","([^"]*)","([^"]*)","(.*)"$/;
+
                     for (const line of lines) {
                         if (!line.trim()) continue;
 
                         try {
                             if (process.platform === 'win32') {
-                                // Standard tasklist CSV format:
-                                // "Image Name","PID","Session Name","Session#","Mem Usage","Status","User Name","CPU Time","Window Title"
-                                // We split by "," to handle commas inside fields (rare in name, common in memory) safely enough for this specific output structure
-                                const parts = line.split('","');
+                                const match = line.match(csvRegex);
                                 
-                                if (parts.length >= 9) {
-                                    // Cleanup leading/trailing quotes from the split result
-                                    const name = parts[0].replace(/^"/, ''); 
-                                    const pid = parseInt(parts[1]);
-                                    const mem = parts[4];
-                                    // The last part (Window Title) might have a trailing quote
-                                    const title = parts[8].replace(/"$/, '');
+                                if (match && match.length >= 10) {
+                                    const name = match[1];
+                                    const pid = parseInt(match[2]);
+                                    const mem = match[5]; // Mem Usage
+                                    // Window Title is group 9. Remove potential trailing quote if regex caught it awkwardly, 
+                                    // though the regex "([^"]*)" usually handles inside quotes.
+                                    // The last group (.*) might catch the closing quote of the line.
+                                    let title = match[9];
+                                    if (title.endsWith('"')) title = title.slice(0, -1);
 
-                                    // CRITICAL: Filter out processes with "N/A" title (Background services)
-                                    // Only show processes that have an actual Window Title or specific game names
-                                    if (pid && (title !== 'N/A' && title.trim() !== '')) {
+                                    // Filter Logic:
+                                    // 1. Must have a valid PID
+                                    // 2. Title must NOT be "N/A" (Background services)
+                                    // 3. Title must not be empty
+                                    // EXCEPTION: Always include known target processes even if title is weird/hidden
+                                    const isTargetGame = /roblox|gta|minecraft|rdr2|fivem/i.test(name);
+                                    const hasWindow = title && title !== 'N/A' && title.trim().length > 0;
+
+                                    if (!isNaN(pid) && (hasWindow || isTargetGame)) {
                                         list.push({ 
                                             name: name, 
                                             pid: pid, 
                                             memory: mem,
-                                            title: title
+                                            title: title === 'N/A' ? (isTargetGame ? 'Background Process' : 'Unknown') : title
                                         });
                                     }
                                 }
                             } else {
-                                // Linux/Mac fallback
+                                // Linux/Mac Fallback
                                 const parts = line.trim().split(/\s+/);
                                 if (parts.length >= 2) {
                                     list.push({ name: parts[0], pid: parseInt(parts[1]), memory: 'N/A', title: parts[0] });
                                 }
                             }
                         } catch (parseErr) {
-                            // Skip malformed lines
+                            console.warn("Failed to parse process line:", line);
                         }
                     }
                 }
 
-                // Sort alphabetically by process name
+                // Sort alphabetically
                 const uniqueList = Array.from(new Map(list.map(item => [item.pid, item])).values());
                 resolve(uniqueList.sort((a, b) => a.name.localeCompare(b.name)));
             });

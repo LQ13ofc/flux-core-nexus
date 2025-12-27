@@ -29,10 +29,11 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
         const list = await window.fluxAPI.getProcesses();
         if (Array.isArray(list)) {
             setProcesses(list);
-            // If the user hasn't selected a process yet and we found some, prompt selection
-            if(processes.length === 0 && list.length > 0 && !stats.target.process) {
-                // Optional: Don't force open, let user click
-                // setShowProcessSelector(true); 
+            if (list.length > 0) {
+               // Optional: Auto-select if there's only one relevant game running? 
+               // For now, just update the list.
+            } else {
+               addLog("Scan complete: No valid windowed processes found.", "WARN", "SYSTEM");
             }
         }
       } catch (e) {
@@ -40,8 +41,8 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
           setProcesses([]);
       }
     } else {
-        // We are in browser mode, show nothing or a warning
-        addLog("Browser Mode Detected: Cannot scan real processes.", "WARN", "SYSTEM");
+        // We are in browser mode
+        addLog("Browser Mode: Process scanning unavailable.", "WARN", "SYSTEM");
         setProcesses([]);
     }
     
@@ -60,7 +61,6 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
             setStats(prev => ({ ...prev, injectionPhase: phase }));
         });
     } else {
-        // Web Browser Fallback
         setStats(prev => ({ ...prev, target: { ...prev.target, dllPath: "C:\\Windows\\System32\\flux-core.dll" } }));
     }
     fetchProcesses();
@@ -80,7 +80,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
     setStats(p => ({ ...p, processStatus: 'ATTACHING', injectionPhase: 0 }));
     
     if (window.fluxAPI) {
-        addLog('Initiating Syscall Injection...', 'INFO', 'KERNEL');
+        addLog(`Initiating Syscall Injection on PID ${stats.target.process.pid}...`, 'INFO', 'KERNEL');
         
         const result = await window.fluxAPI.inject(
             stats.target.process.pid,
