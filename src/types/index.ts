@@ -54,9 +54,3 @@ export interface FluxAPI {
   saveSettings: (settings: any) => Promise<boolean>;
   loadSettings: () => Promise<any>;
 }
-
-declare global {
-  interface Window {
-    fluxAPI: FluxAPI;
-  }
-}

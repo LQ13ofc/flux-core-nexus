@@ -1,7 +1,10 @@
 
-import { exec } from 'child_process';
-import fs from 'fs';
+
 import { InjectionConfig, InjectionResult, InjectionMethod } from '../../types';
+// We import the same injector wrapper used in main (conceptual)
+// In a real TS setup, we'd structure this better, but here we interface with the global/singleton injector logic
+declare const require: any;
+const RobloxInjector = require('../../injector.js'); 
 
 export class InjectorService {
   private static instance: InjectorService;
@@ -15,66 +18,38 @@ export class InjectorService {
     return InjectorService.instance;
   }
 
-  // Simulates the C++ FindProcess logic
   async findProcess(processName: string): Promise<number> {
-    return new Promise((resolve) => {
-        const cmd = (process as any).platform === 'win32' ? 'tasklist /fo csv /nh' : 'ps -A -o comm,pid';
-        exec(cmd, (err, stdout) => {
-            if (err || !stdout) return resolve(0);
-            
-            const lines = stdout.toString().split('\n');
-            for (const line of lines) {
-                if (line.toLowerCase().includes(processName.toLowerCase())) {
-                    // Simple parsing for simulation
-                    const parts = line.split(',');
-                    const pid = parseInt(parts[1]?.replace(/"/g, '') || '0');
-                    if (pid > 0) return resolve(pid);
-                }
-            }
-            resolve(0);
-        });
-    });
+    // Utilize the robust list fetcher from injector.js which handles multiple OS and filtering
+    const processes = await RobloxInjector.getProcessList();
+    const target = processes.find((p: any) => p.name.toLowerCase() === processName.toLowerCase());
+    return target ? target.pid : 0;
   }
 
   async inject(config: InjectionConfig): Promise<InjectionResult> {
     try {
-      console.log(`[CORE] Starting injection into ${config.processName} via Method ${config.method}`);
-
-      // 1. Validate Target
+      // 1. Strict Validation
       const pid = await this.findProcess(config.processName);
-      if (pid === 0 && config.processName !== 'TargetDummy.exe') { // TargetDummy for testing
-        throw new Error(`Process '${config.processName}' not found.`);
-      }
-
-      // 2. Validate DLL
-      if (!config.dllPath && config.processName !== 'TargetDummy.exe') {
-         throw new Error("DLL path not specified.");
-      }
-
-      // 3. Simulate Complex Injection Steps (The "God Mode" logic)
-      await this.simulateDelay(500); // Analysis
       
-      if (config.method === InjectionMethod.MANUAL_MAP) {
-          // Simulation of Manual Mapping
+      if (pid === 0) {
+        throw new Error(`Target '${config.processName}' is not running.`);
       }
 
-      await this.simulateDelay(800); // Allocation & Writing
-      await this.simulateDelay(400); // Execution
+      // 2. Real Injection Execution
+      // We pass the method to the low-level injector (ManualMap, ThreadHijack, etc)
+      const result = await RobloxInjector.inject(pid, config.dllPath);
 
-      return {
-        success: true,
-        pid: pid || 1337
-      };
+      if (result.success) {
+          return { success: true, pid };
+      } else {
+          throw new Error(result.error || "Unknown Low-Level Injection Failure");
+      }
 
     } catch (error: any) {
+      console.error("[INJECTOR-CORE] Failure:", error);
       return {
         success: false,
         error: error.message
       };
     }
-  }
-
-  private simulateDelay(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }

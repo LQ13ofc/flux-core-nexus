@@ -1,5 +1,6 @@
 
 
+
 export enum AppView {
   DASHBOARD = 'dashboard',
   EDITOR = 'editor',
@@ -134,13 +135,31 @@ export interface GamePack {
   bypassMethod: string;
 }
 
+export interface InjectionConfig {
+  processName: string;
+  dllPath: string;
+  method: number;
+}
+
+export interface InjectionResult {
+  success: boolean;
+  pid?: number;
+  error?: string;
+  log?: string[];
+}
+
 export interface FluxAPI {
   getPlatform: () => Promise<Platform>;
   getProcesses: () => Promise<ProcessInfo[]>;
   onLog: (callback: (data: { message: string; level: 'INFO' | 'SUCCESS' | 'ERROR' | 'WARN'; category: string }) => void) => void;
   getBundledDLL: () => Promise<string>;
   onPhaseUpdate: (callback: (phase: number) => void) => void;
-  inject: (pid: number, dllPath: string, settings: AppSettings) => Promise<{ success: boolean; error?: string }>;
+  
+  inject(config: InjectionConfig): Promise<InjectionResult>;
+  inject(pid: number, dllPath: string, settings: AppSettings): Promise<{ success: boolean; error?: string }>;
+
+  selectFile: () => Promise<string | null>;
+
   executeScript: (code: string) => Promise<{ success: boolean; error?: string }>;
   minimize: () => void;
   toggleMaximize: () => void;

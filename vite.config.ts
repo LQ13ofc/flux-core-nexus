@@ -9,19 +9,14 @@ const __dirname = path.dirname(__filename);
 export default defineConfig({
   plugins: [react()],
   root: path.join(__dirname, 'src/renderer'),
-  base: './', 
+  base: './',
   build: {
     outDir: path.join(__dirname, 'dist/renderer'),
     emptyOutDir: true,
-    chunkSizeWarningLimit: 1000,
+    sourcemap: false,
     rollupOptions: {
       external: ['electron'],
       input: path.join(__dirname, 'src/renderer/index.html'),
-      output: {
-        entryFileNames: 'assets/[name].js',
-        chunkFileNames: 'assets/[name].js',
-        assetFileNames: 'assets/[name].[ext]'
-      }
     }
   },
   resolve: {
