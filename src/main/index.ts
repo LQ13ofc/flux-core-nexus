@@ -31,7 +31,7 @@ async function createWindow() {
     resizable: true,
     backgroundColor: '#0d0d0f',
     webPreferences: {
-      // Point to the compiled preload script
+      // Point to the compiled preload script relative to dist/main/
       preload: path.join(__dirname, '../preload/preload.js'),
       nodeIntegration: false,
       contextIsolation: true, // CRITICAL: Security Fix
@@ -50,7 +50,7 @@ async function createWindow() {
       }
   });
 
-  // CRITICAL SECURITY: Block new window creation (e.g., target="_blank")
+  // CRITICAL SECURITY: Block new window creation
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
       console.warn(`Blocked new window: ${url}`);
       return { action: 'deny' };

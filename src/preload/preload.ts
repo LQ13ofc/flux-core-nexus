@@ -14,7 +14,6 @@ contextBridge.exposeInMainWorld('fluxAPI', {
 
     // Operations
     inject: async (pid: number, dllPath: string, settings: AppSettings) => {
-        // Send as stringified JSON to simulate encrypted payload structure
         const payload = JSON.stringify({ pid, dllPath, settings });
         return ipcRenderer.invoke('inject-dll', payload);
     },

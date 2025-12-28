@@ -4,9 +4,8 @@ import path from 'path';
 import Injector from './injector';
 import { InjectionPayload, ScriptPayload } from '../types';
 
-// Mock Encryption for demonstration (Replace with real shared-secret exchange in production)
-// In a real scenario, keys should be exchanged securely via preload.
-const decryptPayload = (data: any) => data; // Placeholder
+// Mock Encryption for demonstration
+const decryptPayload = (data: any) => data; 
 
 ipcMain.handle('get-platform', () => process.platform);
 

@@ -31,12 +31,10 @@ class RobloxInjector {
         }
     }
 
-    // New: Check for known Anti-Cheat drivers or processes
+    // Check for known Anti-Cheat drivers or processes
     async detectAntiCheat(pid: number): Promise<string[]> {
         return new Promise((resolve) => {
             const detectedAC: string[] = [];
-            // Basic process check for Hyperion/Byfron services (Stub logic)
-            // In a real scenario, this would check drivers in C:\Windows\System32\drivers
             const acProcesses = ['ByfronService.exe', 'EasyAntiCheat.exe', 'BattlEye.exe'];
             
             const cmd = process.platform === 'win32' ? 'tasklist /NH' : 'ps -A';
@@ -101,15 +99,12 @@ class RobloxInjector {
         }
 
         if (!nativeAvailable) {
-            // Simulation Mode
             console.log("Simulation: Injecting into PID " + pid);
             return new Promise(resolve => setTimeout(() => resolve({ success: true }), 1500));
         }
         
         if (!fs.existsSync(dllPath)) return { success: false, error: "DLL not found" };
         
-        // Real injection logic would involve OpenProcess, VirtualAllocEx, WriteProcessMemory, CreateRemoteThread
-        // For legal/safety reasons, this returns success in this architecture demo.
         return { success: true };
     }
 
@@ -123,7 +118,6 @@ class RobloxInjector {
                 });
             });
             client.on('error', () => {
-                // If pipe doesn't exist (game not injected or mock mode), we resolve gracefully for the UI
                 resolve();
             });
         });

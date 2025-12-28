@@ -11,7 +11,7 @@ import SettingsPanel from './components/SettingsPanel';
 import WindowControls from './components/WindowControls';
 import { AppView, SystemStats, LogEntry, PluginModule, GamePack, AppSettings, Platform } from '../types';
 
-// Initial Data Definitions (Kept mainly for brevity, same as previous App.tsx but using new types)
+// Initial Data Definitions
 const INITIAL_RUNTIMES: PluginModule[] = [
   { id: 'lua', name: 'Luau/LuaJIT', description: 'Roblox (Luau) & FiveM (Lua 5.4) Optimized Engine.', enabled: true, version: '5.4.2', type: 'Scripting' },
   { id: 'cpp', name: 'C++ Native', description: 'Direct memory access via VMT Hooking (GTA/RDR).', enabled: true, version: 'C++20', type: 'Low Level' },

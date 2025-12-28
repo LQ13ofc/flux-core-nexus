@@ -132,26 +132,3 @@ export interface GamePack {
   scripts: GameScript[];
   bypassMethod: string;
 }
-
-// Global API Definition
-declare global {
-  interface Window {
-    fluxAPI: {
-      getPlatform: () => Promise<Platform>;
-      getProcesses: () => Promise<ProcessInfo[]>;
-      selectFile: () => Promise<{ path: string, name: string, size: string } | null>;
-      getBundledDLL: () => Promise<string>;
-      
-      // Controls
-      minimize: () => void;
-      toggleMaximize: () => void;
-      close: () => void;
-
-      inject: (pid: number, dllPath: string, settings: AppSettings) => Promise<{ success: boolean; error?: string }>;
-      executeScript: (script: string) => Promise<{ success: boolean; error?: string }>;
-      onLog: (callback: (data: LogEntry) => void) => void;
-      onPhaseUpdate: (callback: (phase: number) => void) => void;
-      version: string;
-    };
-  }
-}

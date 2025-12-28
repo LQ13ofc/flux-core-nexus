@@ -13,11 +13,11 @@ export type Platform = 'win32' | 'linux' | 'darwin' | 'aix' | 'freebsd' | 'openb
 export type ComplexityMode = 'SIMPLE' | 'COMPLEX';
 
 export type InjectionMethodType = 
-  | 'ManualMap'           // Ghost Manual Mapper (7 Phases)
-  | 'NtCreateThreadEx'    // Syscall Injection
-  | 'ThreadHijack'        // Stealth Thread Hijacking
-  | 'LoadLibraryA'        // Standard (High Risk)
-  | 'LD_PRELOAD';          // Linux Standard;
+  | 'ManualMap'           
+  | 'NtCreateThreadEx'    
+  | 'ThreadHijack'        
+  | 'LoadLibraryA'        
+  | 'LD_PRELOAD';          
 
 export interface ProcessInfo {
   name: string;
@@ -36,7 +36,7 @@ export interface InjectionTarget {
 
 export interface SystemStats {
   processStatus: 'INACTIVE' | 'ATTACHING' | 'INJECTED' | 'ERROR';
-  injectionPhase: number; // 0 to 7
+  injectionPhase: number; 
   target: InjectionTarget;
   currentPlatform: Platform;
   pipeConnected: boolean;
@@ -96,23 +96,6 @@ export interface AppSettings {
   antiOBS: boolean;
   kernelPriority: boolean;
   executionStrategy: 'INTERNAL' | 'EXTERNAL';
-  manualMapping?: {
-    stripPE: boolean;
-    eraseTraces: boolean;
-    resolveImports: boolean;
-    shellcodeStub: boolean;
-  };
-  bypasses?: {
-    directSyscalls: boolean;
-    vmtHooking: boolean;
-    threadSpoofing: boolean;
-    watchdogSuspend: boolean;
-  };
-  luaEngine?: {
-    aobScan: boolean;
-    bytecodeInjection: boolean;
-    cClosureWrapper: boolean;
-  };
 }
 
 export interface GameScript {
