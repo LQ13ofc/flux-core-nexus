@@ -164,3 +164,9 @@ export interface FluxAPI {
   saveSettings: (settings: AppSettings) => Promise<boolean>;
   loadSettings: () => Promise<AppSettings | null>;
 }
+
+declare global {
+  interface Window {
+    fluxAPI: FluxAPI;
+  }
+}

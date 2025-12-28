@@ -1,6 +1,4 @@
 
-
-
 export enum AppView {
   DASHBOARD = 'dashboard',
   EDITOR = 'editor',
@@ -166,10 +164,4 @@ export interface FluxAPI {
   close: () => void;
   saveSettings: (settings: AppSettings) => Promise<boolean>;
   loadSettings: () => Promise<AppSettings | null>;
-}
-
-declare global {
-  interface Window {
-    fluxAPI: FluxAPI;
-  }
 }

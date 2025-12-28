@@ -1,24 +1,20 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import './services/injector.service';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const isDev = process.env.NODE_ENV === 'development';
 
-// Prevent multiple instances
-const gotLock = app.requestSingleInstanceLock();
-if (!gotLock) {
-  app.quit();
-  (process as any).exit(0);
-}
-
-// Global configurations
+// 1. Disable Hardware Acceleration to prevent rendering glitches
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
+
+// 2. Prevent Multiple Instances
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+  process.exit(0);
+}
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -92,7 +88,7 @@ ipcMain.on('window-maximize', () => {
 ipcMain.on('window-close', () => app.quit());
 
 // Platform IPC
-ipcMain.handle('get-platform', () => (process as any).platform);
+ipcMain.handle('get-platform', () => process.platform);
 
 // Lifecycle
 app.whenReady().then(() => {
@@ -106,7 +102,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if ((process as any).platform !== 'darwin') {
+  if (process.platform !== 'darwin') {
     app.quit();
   }
 });
