@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Zap, Target, Search, RefreshCw, Activity,
-  PlayCircle, Ghost, FileCheck, Power, ShieldCheck
+  PlayCircle, Ghost, FileCheck, Power, ShieldCheck,
+  Gamepad2, BadgeCheck
 } from 'lucide-react';
 import { SystemStats, ProcessInfo, AppSettings } from '../types';
 
@@ -15,12 +16,21 @@ interface DashboardProps {
   setSettings: React.Dispatch<React.SetStateAction<AppSettings>>;
 }
 
+const KNOWN_TARGETS = [
+  'roblox', 'gta5', 'rdr2', 'minecraft', 'projectzomboid', 
+  'fivem', 'dota2', 'cs2', 'valorant', 'fortnite', 
+  'overwatch', 'apex', 'cod', 'warzone', 'eurotrucks2',
+  'rust', 'tarkov', 'dayz', 'amongus', 'terraria'
+];
+
 const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHub, settings }) => {
   const [processes, setProcesses] = useState<ProcessInfo[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [processSearch, setProcessSearch] = useState('');
   const [showProcessSelector, setShowProcessSelector] = useState(false);
   
+  const isKnownTarget = (name: string) => KNOWN_TARGETS.some(t => name.toLowerCase().includes(t));
+
   const fetchProcesses = async () => {
     setIsScanning(true);
     
@@ -28,12 +38,35 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
       try {
         const list = await window.fluxAPI.getProcesses();
         if (Array.isArray(list)) {
-            setProcesses(list);
-            if (list.length > 0) {
-               // Optional: Auto-select if there's only one relevant game running? 
-               // For now, just update the list.
-            } else {
-               addLog("Scan complete: No valid windowed processes found.", "WARN", "SYSTEM");
+            // Sorting Logic:
+            // 1. Known Games (Verified)
+            // 2. Processes with Valid Window Titles (Apps)
+            // 3. Background/Other (if any sneak through)
+            const sorted = list.sort((a, b) => {
+                const aName = a.name.toLowerCase();
+                const bName = b.name.toLowerCase();
+                const isTargetA = isKnownTarget(aName);
+                const isTargetB = isKnownTarget(bName);
+
+                // Priority 1: Known Targets
+                if (isTargetA && !isTargetB) return -1;
+                if (!isTargetA && isTargetB) return 1;
+
+                // Priority 2: Valid Window Titles (Non-Generic)
+                const validTitleA = a.title && a.title !== 'N/A' && a.title !== 'Unknown' && !a.title.includes('Background');
+                const validTitleB = b.title && b.title !== 'N/A' && b.title !== 'Unknown' && !b.title.includes('Background');
+
+                if (validTitleA && !validTitleB) return -1;
+                if (!validTitleA && validTitleB) return 1;
+
+                // Priority 3: Alphabetical
+                return a.name.localeCompare(b.name);
+            });
+
+            setProcesses(sorted);
+            
+            if (sorted.length === 0) {
+               addLog("Scan complete: No executable windows found.", "WARN", "SYSTEM");
             }
         }
       } catch (e) {
@@ -188,33 +221,46 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
                                 autoFocus
                             />
                         </div>
-                        <div className="max-h-[200px] overflow-y-auto custom-scrollbar space-y-1">
+                        <div className="max-h-[250px] overflow-y-auto custom-scrollbar space-y-1">
                             {filteredProcesses.length === 0 ? (
                                 <div className="text-center py-8 text-zinc-600 text-xs italic">
                                     {isScanning ? 'Scanning system...' : 'No active windows found.'}
                                 </div>
                             ) : (
-                                filteredProcesses.map(proc => (
-                                    <button 
-                                        key={proc.pid}
-                                        onClick={() => {
-                                            setStats(s => ({...s, target: {...s.target, process: proc}}));
-                                            setShowProcessSelector(false);
-                                        }}
-                                        className={`w-full flex items-center justify-between p-3 rounded-xl transition-all group ${stats.target.process?.pid === proc.pid ? 'bg-blue-600/10 border border-blue-500/20' : 'hover:bg-white/[0.03] border border-transparent'}`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-black/40 flex items-center justify-center text-xs font-bold text-zinc-500 uppercase">
-                                                {proc.name.charAt(0)}
+                                filteredProcesses.map(proc => {
+                                    const verified = isKnownTarget(proc.name);
+                                    return (
+                                        <button 
+                                            key={proc.pid}
+                                            onClick={() => {
+                                                setStats(s => ({...s, target: {...s.target, process: proc}}));
+                                                setShowProcessSelector(false);
+                                            }}
+                                            className={`w-full flex items-center justify-between p-3 rounded-xl transition-all group ${stats.target.process?.pid === proc.pid ? 'bg-blue-600/10 border border-blue-500/20' : 'hover:bg-white/[0.03] border border-transparent'}`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold uppercase ${verified ? 'bg-green-500/10 text-green-500' : 'bg-black/40 text-zinc-500'}`}>
+                                                    {verified ? <Gamepad2 size={16} /> : proc.name.charAt(0)}
+                                                </div>
+                                                <div className="text-left">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={`text-xs font-bold transition-colors ${verified ? 'text-white' : 'text-zinc-300 group-hover:text-blue-400'}`}>
+                                                            {proc.name}
+                                                        </div>
+                                                        {verified && (
+                                                            <div className="flex items-center gap-0.5 text-[8px] font-black text-green-500 bg-green-500/10 px-1 rounded border border-green-500/20">
+                                                                <BadgeCheck size={8} />
+                                                                TARGET
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-[10px] text-zinc-600 truncate max-w-[200px]">{proc.title || 'Unknown Window'}</div>
+                                                </div>
                                             </div>
-                                            <div className="text-left">
-                                                <div className="text-xs font-bold text-zinc-200 group-hover:text-blue-400 transition-colors">{proc.name}</div>
-                                                <div className="text-[10px] text-zinc-600 truncate max-w-[200px]">{proc.title || 'Unknown Window'}</div>
-                                            </div>
-                                        </div>
-                                        <div className="text-[10px] font-mono text-zinc-600">{proc.pid}</div>
-                                    </button>
-                                ))
+                                            <div className="text-[10px] font-mono text-zinc-600">{proc.pid}</div>
+                                        </button>
+                                    );
+                                })
                             )}
                         </div>
                     </div>
