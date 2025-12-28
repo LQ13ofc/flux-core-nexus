@@ -1,4 +1,5 @@
 
+
 export enum AppView {
   DASHBOARD = 'dashboard',
   EDITOR = 'editor',
@@ -131,4 +132,25 @@ export interface GamePack {
   engine: string;
   scripts: GameScript[];
   bypassMethod: string;
+}
+
+export interface FluxAPI {
+  getPlatform: () => Promise<Platform>;
+  getProcesses: () => Promise<ProcessInfo[]>;
+  onLog: (callback: (data: { message: string; level: 'INFO' | 'SUCCESS' | 'ERROR' | 'WARN'; category: string }) => void) => void;
+  getBundledDLL: () => Promise<string>;
+  onPhaseUpdate: (callback: (phase: number) => void) => void;
+  inject: (pid: number, dllPath: string, settings: AppSettings) => Promise<{ success: boolean; error?: string }>;
+  executeScript: (code: string) => Promise<{ success: boolean; error?: string }>;
+  minimize: () => void;
+  toggleMaximize: () => void;
+  close: () => void;
+  saveSettings: (settings: AppSettings) => Promise<boolean>;
+  loadSettings: () => Promise<AppSettings | null>;
+}
+
+declare global {
+  interface Window {
+    fluxAPI: FluxAPI;
+  }
 }

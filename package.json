@@ -1,13 +1,13 @@
 
 {
   "name": "flux-core-nexus",
-  "version": "5.0.0",
-  "description": "Flux Core Nexus: Advanced Execution Environment (Educational Edition)",
+  "version": "4.1.0",
+  "description": "Flux Core Nexus: Advanced Execution Environment (God Mode)",
   "main": "dist/main/index.js",
   "author": "Nexus Dev Team",
   "license": "MIT",
   "scripts": {
-    "postinstall": "electron-builder install-app-deps && electron-rebuild",
+    "postinstall": "electron-builder install-app-deps",
     "clean": "rimraf dist release",
     "dev": "concurrently \"npm:dev:vite\" \"npm:dev:electron\"",
     "dev:vite": "vite",
