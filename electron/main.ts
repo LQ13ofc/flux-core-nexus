@@ -1,6 +1,10 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import './services/injector.service';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -13,7 +17,7 @@ app.commandLine.appendSwitch('disable-background-timer-throttling');
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
-  process.exit(0);
+  (process as any).exit(0);
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -88,7 +92,7 @@ ipcMain.on('window-maximize', () => {
 ipcMain.on('window-close', () => app.quit());
 
 // Platform IPC
-ipcMain.handle('get-platform', () => process.platform);
+ipcMain.handle('get-platform', () => (process as any).platform);
 
 // Lifecycle
 app.whenReady().then(() => {
@@ -102,7 +106,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  if ((process as any).platform !== 'darwin') {
     app.quit();
   }
 });
@@ -115,7 +119,7 @@ app.on('second-instance', () => {
 });
 
 // Error Handling
-process.on('uncaughtException', (error) => {
+(process as any).on('uncaughtException', (error: Error) => {
   console.error('Uncaught exception:', error);
   if (!isDev) {
     dialog.showErrorBox('Fatal Error', `Application crashed: ${error.message}`);

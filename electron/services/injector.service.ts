@@ -12,7 +12,7 @@ declare const require: any;
 
 try {
     koffi = require('koffi');
-    nativeAvailable = process.platform === 'win32';
+    nativeAvailable = (process as any).platform === 'win32';
 } catch (e) {
     console.warn("Native modules unavailable. Running in compatibility mode.");
 }
@@ -37,7 +37,7 @@ class InjectorService {
 
         ipcMain.handle('get-bundled-dll', () => {
             // Check resourcesPath (production) or local assets (dev)
-            const prodPath = path.join(process.resourcesPath || app.getAppPath(), 'resources', 'assets', 'flux-core-engine.dll');
+            const prodPath = path.join((process as any).resourcesPath || app.getAppPath(), 'resources', 'assets', 'flux-core-engine.dll');
             return prodPath;
         });
 
@@ -47,7 +47,7 @@ class InjectorService {
 
     async getProcessList(): Promise<any[]> {
         return new Promise((resolve) => {
-            const cmd = process.platform === 'win32' 
+            const cmd = (process as any).platform === 'win32' 
                 ? 'tasklist /v /fo csv /NH' 
                 : 'ps -A -o comm,pid';
             
@@ -57,7 +57,7 @@ class InjectorService {
                     const lines = stdout.toString().split(/\r?\n/);
                     for (const line of lines) {
                         try {
-                            if (process.platform === 'win32' && line.trim()) {
+                            if ((process as any).platform === 'win32' && line.trim()) {
                                 const parts = line.split('","').map(p => p.replace(/^"|"$/g, '').trim());
                                 if (parts.length >= 2) {
                                     const name = parts[0];
@@ -99,7 +99,7 @@ class InjectorService {
     }
 
     async executeScript(code: string) {
-        const pipeName = process.platform === 'win32' ? '\\\\.\\pipe\\NexusEnginePipe' : '/tmp/NexusEnginePipe';
+        const pipeName = (process as any).platform === 'win32' ? '\\\\.\\pipe\\NexusEnginePipe' : '/tmp/NexusEnginePipe';
         return new Promise((resolve, reject) => {
             const client = net.createConnection(pipeName, () => {
                 client.write(code, (err) => {
