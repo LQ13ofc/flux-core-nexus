@@ -1,20 +1,22 @@
+
 {
-  "name": "flux-core-master",
-  "version": "4.3.0",
-  "description": "Flux Core Nexus: Advanced Execution Environment",
-  "main": "electron-main.js",
+  "name": "flux-core-nexus",
+  "version": "5.0.0",
+  "description": "Flux Core Nexus: Advanced Execution Environment (Educational Edition)",
+  "main": "dist/main/index.js",
   "author": "Nexus Dev Team",
   "license": "MIT",
   "scripts": {
     "postinstall": "electron-builder install-app-deps",
-    "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
-    "start": "npm run dev",
     "clean": "rimraf dist release",
-    "build:frontend": "vite build",
-    "prebuild": "npm run clean && npm run build:frontend",
-    "build:win": "npm run prebuild && electron-builder --win --x64",
-    "build:linux": "npm run prebuild && electron-builder --linux --x64",
-    "build:mac": "npm run prebuild && electron-builder --mac --arm64"
+    "dev": "concurrently \"npm:dev:vite\" \"npm:dev:electron\"",
+    "dev:vite": "vite",
+    "dev:electron": "wait-on tcp:5173 && cross-env NODE_ENV=development electron .",
+    "build": "npm run clean && npm run build:main && npm run build:preload && npm run build:renderer && electron-builder",
+    "build:main": "tsc -p tsconfig.node.json",
+    "build:preload": "tsc -p tsconfig.node.json --outDir dist/preload src/preload/preload.ts",
+    "build:renderer": "vite build",
+    "typecheck": "tsc --noEmit"
   },
   "build": {
     "appId": "com.fluxcore.nexus",
@@ -25,16 +27,26 @@
     },
     "files": [
       "dist/**/*",
-      "electron-main.js",
-      "preload.js",
-      "injector.js",
-      "package.json",
-      "assets/**/*"
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "assets",
+        "to": "assets",
+        "filter": ["**/*"]
+      }
     ],
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico",
       "requestedExecutionLevel": "requireAdministrator"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Development"
+    },
+    "mac": {
+      "target": "dmg"
     }
   },
   "dependencies": {
@@ -54,6 +66,10 @@
     "concurrently": "^8.2.0",
     "wait-on": "^7.2.0",
     "typescript": "^5.3.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/node": "^20.10.0",
+    "cross-env": "^7.0.3",
     "tailwindcss": "^3.4.1",
     "autoprefixer": "^10.4.17",
     "postcss": "^8.4.35"

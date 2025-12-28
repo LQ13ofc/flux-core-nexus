@@ -1,23 +1,33 @@
-import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
-import react from '@vitejs/plugin-react';
 
-export default defineConfig(({ mode }) => {
-    const env = loadEnv(mode, '.', '');
-    return {
-      server: {
-        port: 3000,
-        host: '0.0.0.0',
-      },
-      plugins: [react()],
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
-      },
-      resolve: {
-        alias: {
-          '@': path.resolve(__dirname, '.'),
-        }
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+
+export default defineConfig({
+  plugins: [react()],
+  root: path.join(__dirname, 'src/renderer'),
+  base: './', 
+  build: {
+    outDir: path.join(__dirname, 'dist/renderer'),
+    emptyOutDir: true,
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      input: path.join(__dirname, 'src/renderer/index.html'),
+      output: {
+        entryFileNames: 'assets/[name].js',
+        chunkFileNames: 'assets/[name].js',
+        assetFileNames: 'assets/[name].[ext]'
       }
-    };
+    }
+  },
+  resolve: {
+    alias: {
+      '@': path.join(__dirname, 'src/renderer'),
+      '@shared': path.join(__dirname, 'src/types')
+    }
+  },
+  server: {
+    port: 5173,
+    strictPort: true,
+  }
 });
