@@ -1,28 +1,27 @@
 import { GamePack, PluginModule } from '../../types';
 
 export const INITIAL_RUNTIMES: PluginModule[] = [
-  { id: 'lua', name: 'Luau/LuaJIT', description: 'Roblox (Luau) & FiveM (Lua 5.4) Optimized Engine.', enabled: true, version: '5.4.2', type: 'Scripting' },
-  { id: 'cpp', name: 'C++ Native', description: 'Direct memory access via VMT Hooking (GTA/RDR).', enabled: true, version: 'C++20', type: 'Low Level' },
-  { id: 'c', name: 'C Native', description: 'Raw syscalls, eBPF and kernel-mode structures.', enabled: true, version: 'C17', type: 'Low Level' },
-  { id: 'csharp', name: 'C# (Mono/Il2Cpp)', description: 'Runtime injection for Unity games (Tarkov).', enabled: true, version: '.NET 6', type: 'Managed' },
-  { id: 'java', name: 'Java HotSpot', description: 'JNI Bridge for Minecraft & Project Zomboid.', enabled: true, version: 'JDK 17', type: 'VM' },
-  { id: 'python', name: 'Python Native', description: 'External automation, data processing & AI Ops.', enabled: true, version: '3.11', type: 'Scripting' },
-  { id: 'asm', name: 'x64 Assembly', description: 'Direct shellcode execution & JMP hooks.', enabled: true, version: 'NASM', type: 'Machine Code' },
+  { id: 'lua', name: 'Luau (Roblox/FiveM)', description: 'JIT-compilado Lua 5.1 com suporte a Task Scheduler customizado.', enabled: true, version: '5.1-Hyperion', type: 'Scripting' },
+  { id: 'c', name: 'C Native (TCC)', description: 'Compilação em tempo real (TinyCC) para manipulação direta de memória.', enabled: true, version: '0.9.27', type: 'Low Level' },
+  { id: 'cpp', name: 'C++ (Clang JIT)', description: 'Execução de código C++ moderno com acesso a ponteiros e VMT.', enabled: true, version: 'LLVM 16', type: 'Native' },
+  { id: 'csharp', name: 'C# (Mono/CLR)', description: 'Injeção de Assembly .NET para jogos Unity (Mono/Il2Cpp).', enabled: true, version: '.NET 8.0', type: 'Managed' },
+  { id: 'js', name: 'JavaScript (V8)', description: 'Engine V8 isolada para lógica de automação e macros externas.', enabled: true, version: 'V8 11.4', type: 'Scripting' },
+  { id: 'java', name: 'Java (JNI Bridge)', description: 'Ponte JNI para Minecraft e jogos baseados em JVM.', enabled: false, version: 'JDK 21', type: 'VM' },
+  { id: 'asm', name: 'x64 Assembly', description: 'Execução direta de mnemonics via Flat Assembler (FASM).', enabled: true, version: '1.73', type: 'Machine Code' },
 ];
 
 export const INITIAL_GAME_LIBRARY: GamePack[] = [
   { 
       id: 'roblox', 
-      name: 'Roblox', 
+      name: 'Roblox (Hyperion)', 
       processName: 'RobloxPlayerBeta.exe', 
       installed: true,
-      engine: 'Luau (Custom Task Scheduler)',
-      bypassMethod: 'Hyperion V4 (Byfron) Bypass',
+      engine: 'Luau (Hyperion V4 Bypass)',
+      bypassMethod: 'Indirect Syscalls + Thread Hijacking',
       scripts: [
-          { id: 'r1', name: 'Invisibility', enabled: false, code: 'game.Players.LocalPlayer.Character.Parent = game.Lighting' },
-          { id: 'r2', name: 'Fly (Nexus V3)', enabled: false, code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/Nexus/Fly/main.lua"))()' },
-          { id: 'r3', name: 'Infinite Jump', enabled: true, code: 'game:GetService("UserInputService").JumpRequest:Connect(function() game.Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):ChangeState(3) end)' },
-          { id: 'r4', name: 'NoClip (Safe)', enabled: false, code: 'game:GetService("RunService").Stepped:Connect(function() for _,v in pairs(game.Players.LocalPlayer.Character:GetChildren()) do if v:IsA("BasePart") then v.CanCollide = false end end end)' }
+          { id: 'r1', name: 'Dex Explorer V4', enabled: false, code: '-- Dex Explorer Loadstring' },
+          { id: 'r2', name: 'Remote Spy', enabled: false, code: '-- Remote Spy Logic' },
+          { id: 'r3', name: 'Infinite Yield', enabled: true, code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()' }
       ]
   },
   {

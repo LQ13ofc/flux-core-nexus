@@ -1,6 +1,8 @@
 import fs from 'fs';
 import net from 'net';
 import path from 'path';
+import crypto from 'crypto';
+import os from 'os';
 import { InjectionErrorCode } from '../../src/types';
 
 // Permissions & Access Masks
@@ -15,7 +17,6 @@ const TH32CS_SNAPPROCESS = 0x00000002;
 const INVALID_HANDLE_VALUE = -1;
 const PAGE_READWRITE_MAP = 0x04;
 const FILE_MAP_ALL_ACCESS = 0xF001F;
-const SHARED_MEM_NAME = "Local\\FluxCoreSharedMemory";
 
 // Privilege Constants
 const SE_PRIVILEGE_ENABLED = 2;
@@ -72,7 +73,7 @@ export class InjectorService {
   private nativeAvailable = false;
   private koffi: any;
   private sessionToken: string;
-  private hMapFile: number = 0; // Handle to shared memory
+  private sharedMemHandle: number = 0;
   
   // Native Function Wrappers
   private kernel32Funcs: Partial<Kernel32> = {};
@@ -94,7 +95,6 @@ export class InjectorService {
         this.nativeAvailable = true;
         this.loadNativeFunctions();
         this.setDebugPrivilege();
-        this.initializeSharedMemory();
       } catch (e) {
         console.warn("Native components (koffi) failed to load. Injection will fail.", e);
       }
@@ -159,44 +159,49 @@ export class InjectorService {
     this.advapi32Funcs.AdjustTokenPrivileges = advapi32.func('__stdcall', 'AdjustTokenPrivileges', 'int', ['int', 'int', 'TOKEN_PRIVILEGES *', 'int', 'ptr', 'ptr']);
   }
 
-  // Creates a Named Shared Memory section containing the session token.
-  // The injected DLL should open "Local\FluxCoreSharedMemory" to read the token.
-  private initializeSharedMemory() {
-      try {
-          if (!this.kernel32Funcs.CreateFileMappingA) return;
-          
-          // 256 bytes is enough for the token
-          this.hMapFile = this.kernel32Funcs.CreateFileMappingA(
-              INVALID_HANDLE_VALUE, 
-              null, 
-              PAGE_READWRITE_MAP, 
-              0, 
-              256, 
-              SHARED_MEM_NAME
-          );
+  private createSharedMemoryForTarget(targetPid: number): boolean {
+    try {
+        if (!this.kernel32Funcs.CreateFileMappingA) return false;
+        
+        // Dynamic Name: The injected DLL will know its own PID and look for this name
+        const dynamicName = `Local\\FluxCore_${targetPid}`;
+        
+        this.sharedMemHandle = this.kernel32Funcs.CreateFileMappingA(
+            INVALID_HANDLE_VALUE, 
+            null, 
+            PAGE_READWRITE_MAP, 
+            0, 
+            1024, // Larger buffer for complex configs
+            dynamicName
+        );
 
-          if (!this.hMapFile) {
-              console.error("Failed to create Shared Memory for token exchange.");
-              return;
-          }
+        if (!this.sharedMemHandle) {
+            console.error(`Failed to create Shared Memory: ${dynamicName}`);
+            return false;
+        }
 
-          const pBuf = this.kernel32Funcs.MapViewOfFile!(
-              this.hMapFile, 
-              FILE_MAP_ALL_ACCESS, 
-              0, 
-              0, 
-              256
-          );
+        const pBuf = this.kernel32Funcs.MapViewOfFile!(
+            this.sharedMemHandle, 
+            FILE_MAP_ALL_ACCESS, 
+            0, 0, 1024
+        );
 
-          if (pBuf) {
-              // Copy token to shared memory
-              this.kernel32Funcs.RtlMoveMemory!(pBuf, this.sessionToken, this.sessionToken.length);
-              this.kernel32Funcs.UnmapViewOfFile!(pBuf);
-              console.log("Shared Memory initialized. Token ready for DLL.");
-          }
-      } catch (e) {
-          console.error("Shared Memory Error:", e);
-      }
+        if (pBuf) {
+            // Write Token + Configs (e.g., {"token":"abc","mode":"GOD_MODE"})
+            const configData = JSON.stringify({ 
+                token: this.sessionToken,
+                mode: 'GOD_MODE' 
+            });
+            
+            this.kernel32Funcs.RtlMoveMemory!(pBuf, configData, configData.length);
+            this.kernel32Funcs.UnmapViewOfFile!(pBuf);
+            console.log(`[SEC] Shared Memory created: ${dynamicName}`);
+            return true;
+        }
+    } catch (e) {
+        console.error("Shared Memory Exception:", e);
+    }
+    return false;
   }
 
   private setDebugPrivilege() {
@@ -263,6 +268,11 @@ export class InjectorService {
     if (process.platform !== 'win32') return { success: false, code: InjectionErrorCode.UNSUPPORTED_PLATFORM, error: "Windows only." };
     if (!fs.existsSync(dllPath)) return { success: false, code: InjectionErrorCode.DLL_NOT_FOUND, error: "DLL not found on disk." };
     if (!this.nativeAvailable) return { success: false, code: InjectionErrorCode.UNKNOWN_ERROR, error: "Native engine unavailable." };
+
+    // 1. Prepare secure channel BEFORE injecting
+    if (!this.createSharedMemoryForTarget(pid)) {
+        return { success: false, code: InjectionErrorCode.UNKNOWN_ERROR, error: "Failed to initialize secure channel." };
+    }
 
     let hProcess = 0;
     let pRemoteMem = 0;
