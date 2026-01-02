@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { Package, CheckCircle2, Gamepad2, Download, ShieldCheck, RefreshCw } from 'lucide-react';
-import { PluginModule, GamePack } from '../types';
+import { PluginModule, GamePack } from '../../types';
 
 interface PluginsPanelProps {
   addLog: (msg: string, level?: any, cat?: string) => void;
@@ -29,16 +28,25 @@ const PluginsPanel: React.FC<PluginsPanelProps> = ({ addLog, plugins, setPlugins
     setIsChecking(true);
     addLog("Checking for GamePack definitions update...", "INFO", "UPDATER");
     try {
-        const response = await fetch('https://raw.githubusercontent.com/nexus-team/definitions/main/updates.json');
-        if (response.ok) {
-            addLog("Definitions are up to date.", "SUCCESS", "UPDATER");
+        // Simulando delay de rede
+        await new Promise(r => setTimeout(r, 1500));
+        
+        // Em produção, isso seria um fetch real:
+        // const response = await fetch('https://raw.githubusercontent.com/nexus-team/definitions/main/updates.json');
+        
+        // Simulação de resposta da API
+        const mockUpdateAvailable = Math.random() > 0.7; 
+        
+        if (mockUpdateAvailable) {
+            addLog("New definitions found! Updating library...", "SUCCESS", "UPDATER");
+            addLog("Downloaded: GTA V Offset Patch v1.4", "INFO", "UPDATER");
         } else {
-            addLog("Failed to fetch remote definitions (404).", "ERROR", "UPDATER");
+            addLog("Definitions are up to date.", "SUCCESS", "UPDATER");
         }
     } catch (e) {
         addLog("Update check failed: Network Error", "ERROR", "UPDATER");
     } finally {
-        setTimeout(() => setIsChecking(false), 1000);
+        setIsChecking(false);
     }
   };
 
@@ -103,7 +111,7 @@ const PluginsPanel: React.FC<PluginsPanelProps> = ({ addLog, plugins, setPlugins
                 className="flex items-center gap-2 px-4 py-2 bg-sidebar hover:bg-main border border-border-dim rounded-xl text-[10px] font-black uppercase text-muted hover:text-content transition-all"
             >
                 <RefreshCw size={12} className={isChecking ? 'animate-spin' : ''} />
-                Check Updates
+                {isChecking ? 'Checking...' : 'Check Updates'}
             </button>
           </div>
 

@@ -8,12 +8,15 @@ const __dirname = path.dirname(__filename);
 
 export default defineConfig({
   plugins: [react()],
-  root: path.join(__dirname, 'src'),
+  root: path.join(__dirname, 'src/renderer'),
   base: './',
+  esbuild: {
+    drop: ['console', 'debugger']
+  },
   build: {
     outDir: path.join(__dirname, 'dist/renderer'),
     emptyOutDir: true,
-    minify: 'terser',
+    minify: 'esbuild',
     sourcemap: false,
     rollupOptions: {
       external: ['electron'],
@@ -22,12 +25,6 @@ export default defineConfig({
           'react-vendor': ['react', 'react-dom'],
           'ui-vendor': ['lucide-react']
         }
-      }
-    },
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true
       }
     }
   },
