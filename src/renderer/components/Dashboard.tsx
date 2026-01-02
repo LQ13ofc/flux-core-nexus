@@ -61,9 +61,8 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
                 prevProcessesHash.current = currentHash;
             }
         }
-      } catch (e) {
-          // Silent catch for background polling
-          // addLog("Process scanner error.", "ERROR", "SYSTEM");
+      } catch (e: any) {
+          addLog(`Scanner Error: ${e.message || 'Unknown Native Error'}`, "ERROR", "SYSTEM");
       }
     }
     setIsScanning(false);

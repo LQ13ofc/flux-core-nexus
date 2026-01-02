@@ -11,6 +11,12 @@ const PAGE_READWRITE = 0x04;
 const THREAD_ALL_ACCESS = 0x1F0FFF;
 const TH32CS_SNAPPROCESS = 0x00000002;
 
+// File Mapping Constants for Token Sharing
+const INVALID_HANDLE_VALUE = -1;
+const PAGE_READWRITE_MAP = 0x04;
+const FILE_MAP_ALL_ACCESS = 0xF001F;
+const SHARED_MEM_NAME = "Local\\FluxCoreSharedMemory";
+
 // Privilege Constants
 const SE_PRIVILEGE_ENABLED = 2;
 const TOKEN_ADJUST_PRIVILEGES = 0x0020;
@@ -33,6 +39,11 @@ interface Kernel32 {
   CreateToolhelp32Snapshot: (dwFlags: number, th32ProcessID: number) => number;
   Process32First: (hSnapshot: number, lppe: any) => number;
   Process32Next: (hSnapshot: number, lppe: any) => number;
+  // Shared Memory
+  CreateFileMappingA: (hFile: number, lpFileMappingAttributes: any, flProtect: number, dwMaximumSizeHigh: number, dwMaximumSizeLow: number, lpName: string) => number;
+  MapViewOfFile: (hFileMappingObject: number, dwDesiredAccess: number, dwFileOffsetHigh: number, dwFileOffsetLow: number, dwNumberOfBytesToMap: number) => Buffer;
+  UnmapViewOfFile: (lpBaseAddress: Buffer) => number;
+  RtlMoveMemory: (Destination: Buffer, Source: string, Length: number) => void;
 }
 
 interface Ntdll {
@@ -61,6 +72,7 @@ export class InjectorService {
   private nativeAvailable = false;
   private koffi: any;
   private sessionToken: string;
+  private hMapFile: number = 0; // Handle to shared memory
   
   // Native Function Wrappers
   private kernel32Funcs: Partial<Kernel32> = {};
@@ -82,6 +94,7 @@ export class InjectorService {
         this.nativeAvailable = true;
         this.loadNativeFunctions();
         this.setDebugPrivilege();
+        this.initializeSharedMemory();
       } catch (e) {
         console.warn("Native components (koffi) failed to load. Injection will fail.", e);
       }
@@ -105,6 +118,12 @@ export class InjectorService {
     this.kernel32Funcs.CloseHandle = kernel32.func('__stdcall', 'CloseHandle', 'int', ['int']);
     this.kernel32Funcs.GetCurrentProcess = kernel32.func('__stdcall', 'GetCurrentProcess', 'int', []);
     
+    // Shared Memory (For Token Handshake)
+    this.kernel32Funcs.CreateFileMappingA = kernel32.func('__stdcall', 'CreateFileMappingA', 'int', ['int', 'ptr', 'uint32', 'uint32', 'uint32', 'str']);
+    this.kernel32Funcs.MapViewOfFile = kernel32.func('__stdcall', 'MapViewOfFile', 'ptr', ['int', 'uint32', 'uint32', 'uint32', 'size_t']);
+    this.kernel32Funcs.UnmapViewOfFile = kernel32.func('__stdcall', 'UnmapViewOfFile', 'int', ['ptr']);
+    this.kernel32Funcs.RtlMoveMemory = kernel32.func('__stdcall', 'RtlMoveMemory', 'void', ['ptr', 'str', 'size_t']);
+
     // Fallback Method
     this.kernel32Funcs.CreateRemoteThread = kernel32.func('__stdcall', 'CreateRemoteThread', 'int', ['int', 'ptr', 'int', 'ptr', 'ptr', 'uint32', 'out uint32']);
 
@@ -138,6 +157,46 @@ export class InjectorService {
     this.advapi32Funcs.OpenProcessToken = advapi32.func('__stdcall', 'OpenProcessToken', 'int', ['int', 'uint32', 'out int']);
     this.advapi32Funcs.LookupPrivilegeValueA = advapi32.func('__stdcall', 'LookupPrivilegeValueA', 'int', ['str', 'str', 'ptr']);
     this.advapi32Funcs.AdjustTokenPrivileges = advapi32.func('__stdcall', 'AdjustTokenPrivileges', 'int', ['int', 'int', 'TOKEN_PRIVILEGES *', 'int', 'ptr', 'ptr']);
+  }
+
+  // Creates a Named Shared Memory section containing the session token.
+  // The injected DLL should open "Local\FluxCoreSharedMemory" to read the token.
+  private initializeSharedMemory() {
+      try {
+          if (!this.kernel32Funcs.CreateFileMappingA) return;
+          
+          // 256 bytes is enough for the token
+          this.hMapFile = this.kernel32Funcs.CreateFileMappingA(
+              INVALID_HANDLE_VALUE, 
+              null, 
+              PAGE_READWRITE_MAP, 
+              0, 
+              256, 
+              SHARED_MEM_NAME
+          );
+
+          if (!this.hMapFile) {
+              console.error("Failed to create Shared Memory for token exchange.");
+              return;
+          }
+
+          const pBuf = this.kernel32Funcs.MapViewOfFile!(
+              this.hMapFile, 
+              FILE_MAP_ALL_ACCESS, 
+              0, 
+              0, 
+              256
+          );
+
+          if (pBuf) {
+              // Copy token to shared memory
+              this.kernel32Funcs.RtlMoveMemory!(pBuf, this.sessionToken, this.sessionToken.length);
+              this.kernel32Funcs.UnmapViewOfFile!(pBuf);
+              console.log("Shared Memory initialized. Token ready for DLL.");
+          }
+      } catch (e) {
+          console.error("Shared Memory Error:", e);
+      }
   }
 
   private setDebugPrivilege() {

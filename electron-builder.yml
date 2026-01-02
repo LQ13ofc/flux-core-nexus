@@ -30,6 +30,10 @@ win:
       arch: [x64]
   icon: resources/icon.ico
   requestedExecutionLevel: requireAdministrator
+  # Code Signing Configuration (Required for SmartScreen Bypass)
+  # cscLink: process.env.CSC_LINK
+  # cscKeyPassword: process.env.CSC_KEY_PASSWORD
+  # verifyUpdateCodeSignature: true
 
 nsis:
   oneClick: false
