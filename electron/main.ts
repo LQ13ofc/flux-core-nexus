@@ -37,27 +37,26 @@ function createWindow(): void {
     mainWindow?.show();
   });
 
-  // Watchdog: Monitora o processo alvo
-  // Fix: Use any type to avoid "Cannot find namespace 'NodeJS'" error
-  let watchdogInterval: any;
+  // Watchdog
+  let watchdogInterval: NodeJS.Timeout | null = null;
   ipcMain.on('start-watchdog', (event, pid: number) => {
     if (watchdogInterval) clearInterval(watchdogInterval);
     watchdogInterval = setInterval(async () => {
       const isAlive = await injector.checkProcessAlive(pid);
       if (!isAlive) {
-        clearInterval(watchdogInterval);
+        if (watchdogInterval) clearInterval(watchdogInterval);
         mainWindow?.webContents.send('target-died', pid);
       }
     }, 2000);
   });
 
   mainWindow.on('closed', () => {
-    clearInterval(watchdogInterval);
+    if (watchdogInterval) clearInterval(watchdogInterval);
     mainWindow = null;
   });
 }
 
-// IPC Handlers Unificados
+// IPC Handlers
 ipcMain.on('window-control', (e, action) => {
   if (!mainWindow) return;
   if (action === 'minimize') mainWindow.minimize();
@@ -69,15 +68,14 @@ ipcMain.handle('get-processes', () => injector.getProcessList());
 ipcMain.handle('inject-dll', (e, { pid, dllPath, settings }) => injector.inject(pid, dllPath, settings));
 ipcMain.handle('execute-script', (e, code) => injector.executeScript(code));
 ipcMain.handle('get-bundled-dll', () => {
-  // Fix: Cast process to any to access Electron-specific resourcesPath property
+  const p = process as any; // Type assertion for Electron specific properties
   return app.isPackaged 
-    ? path.join((process as any).resourcesPath, 'assets', 'flux-core-engine.dll')
+    ? path.join(p.resourcesPath, 'assets', 'flux-core-engine.dll')
     : path.join(__dirname, '../../resources/assets/flux-core-engine.dll');
 });
 
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
-  // Fix: Cast process to any to access platform property
-  if ((process as any).platform !== 'darwin') app.quit();
+  if (process.platform !== 'darwin') app.quit();
 });

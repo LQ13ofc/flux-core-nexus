@@ -1,9 +1,8 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
-  Zap, Target, Search, RefreshCw, Activity,
-  PlayCircle, Ghost, FileCheck, Power, ShieldCheck,
-  Gamepad2, BadgeCheck
+  Zap, Target, Search, RefreshCw,
+  PlayCircle, Ghost, Power, ShieldCheck,
+  Gamepad2
 } from 'lucide-react';
 import { SystemStats, ProcessInfo, AppSettings } from '../types';
 
@@ -28,31 +27,36 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, setStats, addLog, onOpenHu
   const [processSearch, setProcessSearch] = useState('');
   const [showProcessSelector, setShowProcessSelector] = useState(false);
   
+  // Ref to track previous process list string for comparison
+  const prevProcessesHash = useRef<string>('');
+
   const isGame = (name: string) => VERIFIED_TARGETS.some(t => name.toLowerCase().includes(t));
 
   const fetchProcesses = async () => {
+    if (isScanning) return;
     setIsScanning(true);
     if (window.fluxAPI) {
       try {
         const list = await window.fluxAPI.getProcesses();
         if (Array.isArray(list)) {
-            const sorted = [...list].sort((a, b) => {
+            // Priority Sorting
+            const sorted = list.sort((a, b) => {
                 const aIsGame = isGame(a.name);
                 const bIsGame = isGame(b.name);
                 if (aIsGame && !bIsGame) return -1;
                 if (!aIsGame && bIsGame) return 1;
-
-                const aHasTitle = a.title && a.title !== 'Background Process' && a.title !== 'N/A';
-                const bHasTitle = b.title && b.title !== 'Background Process' && b.title !== 'N/A';
-                if (aHasTitle && !bHasTitle) return -1;
-                if (!aHasTitle && bHasTitle) return 1;
-
                 return a.name.localeCompare(b.name);
             });
-            setProcesses(sorted);
             
-            if (sorted.length === 0) {
-               addLog("Scan complete: No relevant processes found.", "WARN", "SYSTEM");
+            // Optimization: Only update state if data changed
+            const currentHash = JSON.stringify(sorted.map(p => p.pid));
+            if (currentHash !== prevProcessesHash.current) {
+                setProcesses(sorted);
+                prevProcessesHash.current = currentHash;
+                
+                if (sorted.length === 0) {
+                    addLog("Scan complete: No relevant processes found.", "WARN", "SYSTEM");
+                }
             }
         }
       } catch (e) {

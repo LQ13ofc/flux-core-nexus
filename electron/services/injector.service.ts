@@ -1,13 +1,17 @@
-import { exec } from 'child_process';
 import fs from 'fs';
 import net from 'net';
+import path from 'path';
 
-// Constantes Win32 API
-const PROCESS_ALL_ACCESS = 0x1F0FFF;
+// Permissions: PROCESS_CREATE_THREAD (0x0002) | PROCESS_VM_OPERATION (0x0008) | PROCESS_VM_WRITE (0x0020) | PROCESS_VM_READ (0x0010) | PROCESS_QUERY_INFORMATION (0x0400)
+// This avoids using PROCESS_ALL_ACCESS (0x1F0FFF) which is heavily monitored.
+const INJECTION_ACCESS_MASK = 0x043A;
+
+// Memory Constants
 const MEM_COMMIT = 0x1000;
 const MEM_RESERVE = 0x2000;
 const PAGE_EXECUTE_READWRITE = 0x40;
 const THREAD_ALL_ACCESS = 0x1F0FFF;
+const TH32CS_SNAPPROCESS = 0x00000002;
 
 export class InjectorService {
   private nativeAvailable = false;
@@ -16,7 +20,7 @@ export class InjectorService {
   private kernel32: any;
   private ntdll: any;
 
-  // Definições de Funções Nativas
+  // Native Functions
   private OpenProcess: any;
   private VirtualAllocEx: any;
   private WriteProcessMemory: any;
@@ -24,6 +28,14 @@ export class InjectorService {
   private GetProcAddress: any;
   private CloseHandle: any;
   private NtCreateThreadEx: any;
+  
+  // Process Snapshot Functions
+  private CreateToolhelp32Snapshot: any;
+  private Process32First: any;
+  private Process32Next: any;
+  
+  // Types
+  private ProcessEntry32Type: any;
 
   constructor() {
     try {
@@ -43,27 +55,46 @@ export class InjectorService {
     this.kernel32 = this.koffi.load('kernel32.dll');
     this.ntdll = this.koffi.load('ntdll.dll');
 
-    // Mapeamento WinAPI - Kernel32
-    this.OpenProcess = this.kernel32.func('__stdcall', 'OpenProcess', 'int', ['int', 'int', 'int']);
+    // WinAPI - Process & Memory
+    this.OpenProcess = this.kernel32.func('__stdcall', 'OpenProcess', 'int', ['uint32', 'int', 'uint32']);
     this.VirtualAllocEx = this.kernel32.func('__stdcall', 'VirtualAllocEx', 'int', ['int', 'int', 'int', 'int', 'int']);
     this.WriteProcessMemory = this.kernel32.func('__stdcall', 'WriteProcessMemory', 'int', ['int', 'int', 'str', 'int', 'int*']);
     this.GetModuleHandleA = this.kernel32.func('__stdcall', 'GetModuleHandleA', 'int', ['str']);
     this.GetProcAddress = this.kernel32.func('__stdcall', 'GetProcAddress', 'int', ['int', 'str']);
     this.CloseHandle = this.kernel32.func('__stdcall', 'CloseHandle', 'int', ['int']);
 
-    // Mapeamento Native API - Ntdll (Undocumented)
+    // WinAPI - Snapshot (Optimization)
+    // struct PROCESSENTRY32
+    this.ProcessEntry32Type = this.koffi.struct('PROCESSENTRY32', {
+        dwSize: 'uint32',
+        cntUsage: 'uint32',
+        th32ProcessID: 'uint32',
+        th32DefaultHeapID: 'uintptr',
+        th32ModuleID: 'uint32',
+        cntThreads: 'uint32',
+        th32ParentProcessID: 'uint32',
+        pcPriClassBase: 'int32',
+        dwFlags: 'uint32',
+        szExeFile: this.koffi.array('char', 260)
+    });
+
+    this.CreateToolhelp32Snapshot = this.kernel32.func('__stdcall', 'CreateToolhelp32Snapshot', 'int', ['uint32', 'uint32']);
+    this.Process32First = this.kernel32.func('__stdcall', 'Process32First', 'int', ['int', 'PROCESSENTRY32 *']);
+    this.Process32Next = this.kernel32.func('__stdcall', 'Process32Next', 'int', ['int', 'PROCESSENTRY32 *']);
+
+    // Native API - Ntdll
     this.NtCreateThreadEx = this.ntdll.func('__stdcall', 'NtCreateThreadEx', 'int', [
-        'out ptr', // ThreadHandle (PHANDLE)
-        'int',     // DesiredAccess (ACCESS_MASK)
-        'ptr',     // ObjectAttributes (POBJECT_ATTRIBUTES)
-        'int',     // ProcessHandle (HANDLE)
-        'ptr',     // StartRoutine (PVOID)
-        'ptr',     // Argument (PVOID)
-        'int',     // CreateFlags (ULONG)
-        'int',     // ZeroBits (ULONG_PTR)
-        'int',     // StackSize (SIZE_T)
-        'int',     // MaximumStackSize (SIZE_T)
-        'ptr'      // AttributeList (PPS_ATTRIBUTE_LIST)
+        'out ptr', // ThreadHandle
+        'int',     // DesiredAccess
+        'ptr',     // ObjectAttributes
+        'int',     // ProcessHandle
+        'ptr',     // StartRoutine
+        'ptr',     // Argument
+        'int',     // CreateFlags
+        'int',     // ZeroBits
+        'int',     // StackSize
+        'int',     // MaximumStackSize
+        'ptr'      // AttributeList
     ]);
   }
 
@@ -77,54 +108,56 @@ export class InjectorService {
   }
 
   async getProcessList(): Promise<any[]> {
+    if (!this.nativeAvailable) return [];
+
     return new Promise((resolve) => {
-      // Note: A full native snapshot implementation via Koffi would be ideal here 
-      // but requires complex struct definitions. Keeping exec for stability but
-      // ensure it's not called on every render cycle (fixed in frontend).
-      const cmd = process.platform === 'win32' 
-        ? 'tasklist /v /fo csv /NH' 
-        : 'ps -A -o comm,pid';
-      
-      exec(cmd, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
         const list: any[] = [];
-        if (!err && stdout) {
-          const lines = stdout.toString().split(/\r?\n/);
-          for (const line of lines) {
-            try {
-              if (process.platform === 'win32') {
-                const parts = line.split('","').map(p => p.replace(/^"|"$/g, '').trim());
-                if (parts.length >= 2) {
-                  list.push({ name: parts[0], pid: parseInt(parts[1]), title: parts[8] || 'N/A' });
-                }
-              } else {
-                const parts = line.trim().split(/\s+/);
-                if (parts.length >= 2) {
-                  list.push({ name: parts[0], pid: parseInt(parts[1]), title: parts[0] });
-                }
-              }
-            } catch (e) {}
-          }
+        const hSnapshot = this.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        
+        if (hSnapshot === -1) {
+            resolve([]);
+            return;
         }
-        resolve(Array.from(new Map(list.map(i => [i.pid, i])).values()));
-      });
+
+        const entry = {};
+        // Initialize dwSize is critical for Windows API
+        // 296 is typical size for x86, typically we let koffi handle sizing if we initialize the struct buffer
+        // But simpler to just rely on koffi decoding
+        
+        let success = this.Process32First(hSnapshot, entry);
+        
+        while (success) {
+            // Koffi automatically decodes the struct into 'entry' object
+            const name = (entry as any).szExeFile; // null-terminated string logic handled by koffi usually
+            const pid = (entry as any).th32ProcessID;
+            
+            // Basic filtering to reduce noise
+            if (pid > 4) {
+                 list.push({
+                    name: name,
+                    pid: pid,
+                    title: name // Snapshot doesn't give window titles easily, saving CPU by skipping EnumWindows
+                });
+            }
+            
+            success = this.Process32Next(hSnapshot, entry);
+        }
+
+        this.CloseHandle(hSnapshot);
+        resolve(list);
     });
   }
 
-  /**
-   * INJEÇÃO VIA NTCREATETHREADEX
-   * Técnica avançada que invoca diretamente o kernel via ntdll.dll,
-   * ignorando hooks comuns na kernel32.dll (CreateRemoteThread).
-   */
   async inject(pid: number, dllPath: string, settings: any) {
     if (!fs.existsSync(dllPath)) return { success: false, error: "DLL not found on disk." };
-    if (!this.nativeAvailable) return { success: false, error: "Native engine unavailable. Install Build Tools." };
+    if (!this.nativeAvailable) return { success: false, error: "Native engine unavailable." };
 
     try {
-        // 1. Abrir Processo
-        const hProcess = this.OpenProcess(PROCESS_ALL_ACCESS, 0, pid);
-        if (!hProcess) return { success: false, error: "Failed to OpenProcess (Access Denied / Anti-Cheat Active)" };
+        // 1. Open Process with minimal required permissions (Stealth)
+        const hProcess = this.OpenProcess(INJECTION_ACCESS_MASK, 0, pid);
+        if (!hProcess) return { success: false, error: "OpenProcess Failed (Access Denied)" };
 
-        // 2. Alocar Memória para o Caminho da DLL
+        // 2. Alloc Memory
         const pathLen = dllPath.length + 1;
         const pRemoteMem = this.VirtualAllocEx(hProcess, 0, pathLen, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
         
@@ -133,7 +166,7 @@ export class InjectorService {
             return { success: false, error: "VirtualAllocEx failed" };
         }
 
-        // 3. Escrever o Caminho na Memória Alocada
+        // 3. Write DLL Path
         const written = [0];
         const writeResult = this.WriteProcessMemory(hProcess, pRemoteMem, dllPath, pathLen, written);
         
@@ -142,40 +175,57 @@ export class InjectorService {
             return { success: false, error: "WriteProcessMemory failed" };
         }
 
-        // 4. Obter endereço de LoadLibraryA em kernel32.dll
+        // 4. Resolve LoadLibraryA
         const hKernel32 = this.GetModuleHandleA("kernel32.dll");
         const pLoadLibrary = this.GetProcAddress(hKernel32, "LoadLibraryA");
 
         if (!pLoadLibrary) {
              this.CloseHandle(hProcess);
-             return { success: false, error: "Failed to find LoadLibraryA address" };
+             return { success: false, error: "GetProcAddress failed" };
         }
 
-        // 5. Executar via NtCreateThreadEx (Bypass)
-        const hThreadBuffer = [0]; // Buffer para receber o handle da thread
+        // 5. Execute via NtCreateThreadEx
+        const hThreadBuffer = [0];
         
         const status = this.NtCreateThreadEx(
             hThreadBuffer,
-            THREAD_ALL_ACCESS, // DesiredAccess
-            null,              // ObjectAttributes
-            hProcess,          // ProcessHandle
-            pLoadLibrary,      // StartRoutine (LoadLibraryA)
-            pRemoteMem,        // Argument (DLL Path Address)
-            0,                 // CreateFlags (0 = Run Immediately)
-            0,                 // ZeroBits
-            0,                 // StackSize
-            0,                 // MaxStackSize
-            null               // AttributeList
+            THREAD_ALL_ACCESS,
+            null,
+            hProcess,
+            pLoadLibrary,
+            pRemoteMem,
+            0, 0, 0, 0, null
         );
 
-        // NT_SUCCESS (0x00000000) e status positivos indicam sucesso
         if (status >= 0) {
             if (hThreadBuffer[0]) this.CloseHandle(hThreadBuffer[0]);
             this.CloseHandle(hProcess);
             return { success: true };
         } else {
             this.CloseHandle(hProcess);
-            // Converter código NTSTATUS para hex para facilitar debug
             const hexStatus = (status >>> 0).toString(16).toUpperCase();
-            return { success: false, error: `NtCreateThreadEx failed. NTSTATUS: 0x${hexStatus}` };
-    d wa  
+            return { success: false, error: `NtCreateThreadEx failed: 0x${hexStatus}` };
+        }
+
+    } catch (e: any) {
+        return { success: false, error: `Exception: ${e.message}` };
+    }
+  }
+
+  async executeScript(code: string): Promise<{ success: boolean; error?: string }> {
+    const pipeName = process.platform === 'win32' ? '\\\\.\\pipe\\NexusEnginePipe' : '/tmp/NexusEnginePipe';
+    return new Promise((resolve) => {
+      const client = net.createConnection(pipeName, () => {
+        client.write(code, (err) => {
+          client.end();
+          if (err) resolve({ success: false, error: err.message });
+          else resolve({ success: true });
+        });
+      });
+      
+      client.on('error', (e) => {
+          resolve({ success: false, error: "IPC Connection Failed. Is the DLL injected?" });
+      });
+    });
+  }
+}
